@@ -1,0 +1,13 @@
+[project]
+name = "notionit"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.25.0", "typing-extensions>=4.0.0"]
+
+[project.optional-dependencies]
+dev = ["pyright>=1.1.345", "types-requests>=2.25.0"]
+
+[tool.pyright]
+type-checking-mode = "strict"
