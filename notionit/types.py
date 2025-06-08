@@ -4,10 +4,7 @@ Notion API 타입 정의 모음
 모든 TypedDict, Literal 타입들을 여기에 정의합니다.
 """
 
-from typing import List, Dict, Optional, Union, TypedDict, Literal
-
-# Notion API 상수
-NOTION_API_VERSION = "2022-06-28"
+from typing import Dict, List, Literal, Optional, TypedDict, Union
 
 # Color types for Notion
 NotionColor = Literal[
@@ -143,6 +140,37 @@ class NotionEquationRichText(TypedDict):
 NotionRichText = Union[NotionTextRichText, NotionEquationRichText]
 
 
+# File object types for blocks
+class NotionFileUploadObject(TypedDict):
+    id: str
+
+
+class NotionExternalFileObject(TypedDict):
+    url: str
+
+
+class NotionFileObject(TypedDict):
+    url: str
+    expiry_time: str
+
+
+class NotionFileContent(TypedDict, total=False):
+    type: Literal["external", "file", "file_upload"]
+    external: NotionExternalFileObject
+    file: NotionFileObject
+    file_upload: NotionFileUploadObject
+    caption: List[NotionRichText]
+    name: str
+
+
+class NotionImageContent(TypedDict, total=False):
+    type: Literal["external", "file", "file_upload"]
+    external: NotionExternalFileObject
+    file: NotionFileObject
+    file_upload: NotionFileUploadObject
+    caption: List[NotionRichText]
+
+
 # Block types
 class NotionEquationBlock(TypedDict):
     object: Literal["block"]
@@ -193,9 +221,107 @@ class NotionCodeBlock(TypedDict):
     code: NotionCodeContent
 
 
+class NotionBulletedListItemContent(TypedDict):
+    rich_text: List[NotionRichText]
+
+
+class NotionBulletedListItemBlock(TypedDict):
+    object: Literal["block"]
+    type: Literal["bulleted_list_item"]
+    bulleted_list_item: NotionBulletedListItemContent
+
+
+class NotionNumberedListItemContent(TypedDict):
+    rich_text: List[NotionRichText]
+
+
+class NotionNumberedListItemBlock(TypedDict):
+    object: Literal["block"]
+    type: Literal["numbered_list_item"]
+    numbered_list_item: NotionNumberedListItemContent
+
+
+class NotionQuoteContent(TypedDict):
+    rich_text: List[NotionRichText]
+
+
+class NotionQuoteBlock(TypedDict):
+    object: Literal["block"]
+    type: Literal["quote"]
+    quote: NotionQuoteContent
+
+
+# Empty dict type for divider
+class EmptyDict(TypedDict):
+    pass
+
+
+class NotionDividerBlock(TypedDict):
+    object: Literal["block"]
+    type: Literal["divider"]
+    divider: EmptyDict
+
+
+class NotionFileBlock(TypedDict):
+    object: Literal["block"]
+    type: Literal["file"]
+    file: NotionFileContent
+
+
+class NotionImageBlock(TypedDict):
+    object: Literal["block"]
+    type: Literal["image"]
+    image: NotionImageContent
+
+
+class NotionTableContent(TypedDict):
+    table_width: int
+    has_column_header: bool
+    has_row_header: bool
+    children: List["NotionTableRowBlock"]
+
+
+class NotionTableBlock(TypedDict):
+    object: Literal["block"]
+    type: Literal["table"]
+    table: NotionTableContent
+
+
+class NotionTableRowContent(TypedDict):
+    cells: List[List[NotionRichText]]
+
+
+class NotionTableRowBlock(TypedDict):
+    object: Literal["block"]
+    type: Literal["table_row"]
+    table_row: NotionTableRowContent
+
+
 # Block unions
-NotionBasicBlock = Union[NotionEquationBlock, NotionHeading1Block, NotionHeading2Block, NotionHeading3Block, NotionParagraphBlock]
-NotionExtendedBlock = Union[NotionEquationBlock, NotionHeading1Block, NotionHeading2Block, NotionHeading3Block, NotionParagraphBlock, NotionCodeBlock]
+NotionBasicBlock = Union[
+    NotionEquationBlock,
+    NotionHeading1Block,
+    NotionHeading2Block,
+    NotionHeading3Block,
+    NotionParagraphBlock,
+]
+
+NotionExtendedBlock = Union[
+    NotionEquationBlock,
+    NotionHeading1Block,
+    NotionHeading2Block,
+    NotionHeading3Block,
+    NotionParagraphBlock,
+    NotionCodeBlock,
+    NotionBulletedListItemBlock,
+    NotionNumberedListItemBlock,
+    NotionQuoteBlock,
+    NotionDividerBlock,
+    NotionFileBlock,
+    NotionImageBlock,
+    NotionTableBlock,
+    NotionTableRowBlock,
+]
 
 
 # Page creation types

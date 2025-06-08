@@ -1,33 +1,10 @@
 #!/usr/bin/env python3
-"""
-Notion Markdown Uploader
+from typing import Callable, Iterable, Optional, Union
 
-마크다운 파일을 Notion 페이지로 변환하고 업로드하는 Python 패키지
+import mistune
 
-Features:
-- 기본 마크다운 지원 (헤더, 단락, 인라인/블록 수식)
-- 코드 블록 지원 (60+ 프로그래밍 언어)
-- 수식 정리 및 최적화
-- 중복 제목 감지 및 처리
-- 일괄 업로드 지원
-- 완전한 타입 안전성 (mypy 호환)
-
-Example:
-    from notion_md_uploader import SmartNotionUploader
-
-    uploader = SmartNotionUploader("your_notion_token", debug=True)
-    result = uploader.smart_upload_markdown_file(
-        "document.md",
-        "parent_page_id",
-        duplicate_strategy="timestamp"
-    )
-"""
-
-from typing import Optional, Union
-
-from .advanced import AdvancedNotionUploader
-from .core import NotionMarkdownUploader
-from .smart import SmartNotionUploader, is_status_result, is_success_result
+from .config import get_config
+from .renderer import MistuneNotionRenderer
 from .types import (
     # 중복 처리 전략
     DuplicateStrategy,
@@ -37,17 +14,18 @@ from .types import (
     NotionExtendedBlock,
     UploadResult,
 )
+from .uploader import NotionUploader, is_status_result, is_success_result
 
 # 기본 공개 인터페이스
 __all__ = [
     # 메인 클래스들
-    "NotionMarkdownUploader",
-    "AdvancedNotionUploader",
-    "SmartNotionUploader",
+    "NotionUploader",
+    "MistuneNotionRenderer",
     # 헬퍼 함수들
     "is_success_result",
     "is_status_result",
     # 중요한 타입들
+    "get_config",
     "NotionAPIResponse",
     "UploadResult",
     "DuplicateStrategy",
@@ -55,25 +33,43 @@ __all__ = [
 ]
 
 
-def create_uploader(token: str, smart: bool = True, debug: bool = False) -> Union[SmartNotionUploader, AdvancedNotionUploader]:
+def create_uploader(
+    token: Union[str, Callable[[], str]] = lambda: get_config("notion_token"),
+    base_url: Union[str, Callable[[], str]] = lambda: get_config("notion_base_url"),
+    notion_version: Union[str, Callable[[], str]] = lambda: get_config("notion_api_version"),
+    plugins: Optional[Union[Iterable[mistune.plugins.PluginRef], Callable[[], Iterable[mistune.plugins.PluginRef]]]] = lambda: get_config("notion_parser_plugins").split(","),
+    debug: bool = False,
+    renderer: mistune.RendererRef = "ast",
+    escape: bool = True,
+    hard_wrap: bool = False,
+) -> NotionUploader:
     """
     편의 함수: 업로더 인스턴스 생성
 
     Args:
         token: Notion API 토큰
-        smart: 스마트 기능 사용 여부 (중복 처리 등)
         debug: 디버깅 출력 활성화 여부
 
     Returns:
         설정된 업로더 인스턴스
     """
-    if smart:
-        return SmartNotionUploader(token, debug=debug)
-    else:
-        return AdvancedNotionUploader(token, debug=debug)
+    return NotionUploader(token=token, base_url=base_url, notion_version=notion_version, debug=debug, renderer=renderer, escape=escape, hard_wrap=hard_wrap, plugins=plugins)
 
 
-def quick_upload(token: str, file_path: str, parent_page_id: str, page_title: Optional[str] = None, duplicate_strategy: DuplicateStrategy = "timestamp") -> UploadResult:
+def quick_upload(
+    file_path: str,
+    token: Union[str, Callable[[], str]] = lambda: get_config("notion_token"),
+    base_url: Union[str, Callable[[], str]] = lambda: get_config("notion_base_url"),
+    notion_version: Union[str, Callable[[], str]] = lambda: get_config("notion_api_version"),
+    parent_page_id: Union[str, Callable[[], str]] = lambda: get_config("notion_parent_page_id"),
+    plugins: Optional[Union[Iterable[mistune.plugins.PluginRef], Callable[[], Iterable[mistune.plugins.PluginRef]]]] = lambda: get_config("notion_parser_plugins").split(","),
+    page_title: Optional[str] = None,
+    duplicate_strategy: Optional[DuplicateStrategy] = None,
+    debug: bool = False,
+    renderer: mistune.RendererRef = "ast",
+    escape: bool = True,
+    hard_wrap: bool = False,
+) -> UploadResult:
     """
     편의 함수: 빠른 업로드
 
@@ -87,5 +83,8 @@ def quick_upload(token: str, file_path: str, parent_page_id: str, page_title: Op
     Returns:
         업로드 결과
     """
-    uploader = SmartNotionUploader(token)
-    return uploader.smart_upload_markdown_file(file_path, parent_page_id, page_title, duplicate_strategy)
+    _parent_page_id = parent_page_id() if callable(parent_page_id) else parent_page_id
+    del parent_page_id
+
+    uploader = create_uploader(token=token, base_url=base_url, notion_version=notion_version, debug=debug, renderer=renderer, escape=escape, hard_wrap=hard_wrap, plugins=plugins)
+    return uploader.upload_markdown_file(file_path=file_path, parent_page_id=_parent_page_id, page_title=page_title, duplicate_strategy=duplicate_strategy)
