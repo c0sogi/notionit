@@ -120,7 +120,7 @@ class NotionUploader:
         try:
             # Parse with Mistune (extract AST from tuple result)
             parse_result = self.markdown_parser.parse(markdown_content)
-            if isinstance(parse_result, tuple):
+            if isinstance(parse_result, tuple):  # pyright: ignore[reportUnnecessaryIsInstance]
                 ast_nodes = parse_result[0]
             else:
                 ast_nodes = parse_result
@@ -186,7 +186,7 @@ class NotionUploader:
             # Code block
             if line.startswith("```"):
                 language = line[3:].strip()
-                code_lines = []
+                code_lines: List[str] = []
                 i += 1
                 while i < len(lines) and not lines[i].startswith("```"):
                     code_lines.append(lines[i])

@@ -28,6 +28,7 @@ from .types import (
     NotionQuoteBlock,
     NotionRichText,
     NotionTableBlock,
+    NotionTableRowBlock,
     NotionTextRichText,
 )
 
@@ -274,7 +275,7 @@ class MistuneNotionRenderer:
     def _render_list_item(self, node: Dict[str, Any], is_ordered: bool) -> None:
         """Render a list item."""
         # Extract list item contents
-        rich_text = []
+        rich_text: List[NotionRichText] = []
 
         for child in node.get("children", []):
             if child.get("type") == "block_text":
@@ -320,7 +321,7 @@ class MistuneNotionRenderer:
 
     def _render_block_quote(self, node: Dict[str, Any]) -> None:
         """Render a block quote."""
-        rich_text = []
+        rich_text: List[NotionRichText] = []
 
         for child in node.get("children", []):
             if child.get("type") == "paragraph":
@@ -347,7 +348,7 @@ class MistuneNotionRenderer:
                 return
 
             # Create table row blocks
-            table_row_blocks = []
+            table_row_blocks: List[NotionTableRowBlock] = []
             for row_data in table_data["rows"]:
                 row_block = self._create_table_row_block(row_data, table_data["column_count"])
                 table_row_blocks.append(row_block)
@@ -377,7 +378,7 @@ class MistuneNotionRenderer:
         thead_nodes = [child for child in children if child.get("type") == "table_head"]
         tbody_nodes = [child for child in children if child.get("type") == "table_body"]
 
-        all_rows = []
+        all_rows: List[List[str]] = []
         has_header = False
 
         # Handle header rows
@@ -398,12 +399,12 @@ class MistuneNotionRenderer:
 
     def _extract_table_rows(self, section_node: Dict[str, Any]) -> List[List[str]]:
         """Extract row data from a table section."""
-        rows = []
+        rows: List[List[str]] = []
 
         # Special handling when table_head directly contains table_cell children
         if section_node.get("type") == "table_head":
             # Treat table_head as a single row
-            row_cells = []
+            row_cells: List[str] = []
             for cell_node in section_node.get("children", []):
                 if cell_node.get("type") == "table_cell":
                     cell_content = self._extract_cell_content(cell_node)
@@ -429,14 +430,16 @@ class MistuneNotionRenderer:
 
     def _extract_cell_content(self, cell_node: Dict[str, Any]) -> str:
         """Extract text content from a cell node."""
-        content_parts = []
+        content_parts: List[str] = []
 
         def extract_text_recursive(node: Any) -> str:
             if isinstance(node, dict):
-                if node.get("type") == "text":
-                    return node.get("raw", "")
-                elif "children" in node:
-                    return "".join(extract_text_recursive(child) for child in node["children"])
+                node_dict = cast(Dict[object, object], node)
+                if node_dict.get("type") == "text":
+                    return str(node_dict.get("raw", ""))
+                elif (children := node_dict.get("children")) and isinstance(children, list):
+                    children = cast(List[object], children)
+                    return "".join(extract_text_recursive(child) for child in children)
             return ""
 
         for child in cell_node.get("children", []):
@@ -444,7 +447,7 @@ class MistuneNotionRenderer:
 
         return "".join(content_parts).strip()
 
-    def _create_table_row_block(self, row_data: List[str], expected_columns: int) -> Dict[str, Any]:
+    def _create_table_row_block(self, row_data: List[str], expected_columns: int) -> NotionTableRowBlock:
         """Create a table row block."""
         # Pad rows with empty cells if needed
         while len(row_data) < expected_columns:
@@ -454,9 +457,9 @@ class MistuneNotionRenderer:
         row_data = row_data[:expected_columns]
 
         # Convert each cell to a rich_text array
-        cells = []
+        cells: List[List[NotionRichText]] = []
         for cell_content in row_data:
-            cell_rich_text = (
+            cell_rich_text: List[NotionRichText] = (
                 [
                     {
                         "type": "text",
@@ -515,11 +518,8 @@ class MistuneNotionRenderer:
         rich_text: List[NotionRichText] = []
 
         for child in children:
-            child_type = child.get("type")
-
-            if child_type == "text":
-                rich_text.append(self._render_text(child))
-            elif child_type == "strong":
+            child_type = str(child.get("type"))
+            if child_type == "strong":
                 rich_text.extend(self._render_strong(child))
             elif child_type == "emphasis":
                 rich_text.extend(self._render_emphasis(child))
@@ -536,10 +536,7 @@ class MistuneNotionRenderer:
             elif child_type == "softbreak" or child_type == "linebreak":
                 rich_text.append(self._render_break())
             else:
-                # Treat unknown inline elements as plain text
-                text = child.get("raw", "")
-                if text:
-                    rich_text.append(cast(NotionTextRichText, {"type": "text", "text": {"content": text}}))
+                rich_text.append(self._render_text(child))
 
         return rich_text
 
@@ -557,7 +554,7 @@ class MistuneNotionRenderer:
 
         # Apply bold to all child text
         for text_item in children_text:
-            if text_item.get("type") == "text" and "annotations" in text_item:
+            if text_item["type"] == "text":
                 text_item["annotations"]["bold"] = True
 
         return children_text
@@ -568,7 +565,7 @@ class MistuneNotionRenderer:
 
         # Apply italic to all child text
         for text_item in children_text:
-            if text_item.get("type") == "text" and "annotations" in text_item:
+            if text_item["type"] == "text":
                 text_item["annotations"]["italic"] = True
 
         return children_text
@@ -579,7 +576,7 @@ class MistuneNotionRenderer:
 
         # Apply strikethrough to all child text
         for text_item in children_text:
-            if text_item.get("type") == "text" and "annotations" in text_item:
+            if text_item["type"] == "text":
                 text_item["annotations"]["strikethrough"] = True
 
         return children_text
@@ -607,8 +604,8 @@ class MistuneNotionRenderer:
 
         # Otherwise apply the link to all child text
         for text_item in children_text:
-            if text_item.get("type") == "text" and "text" in text_item:
-                cast(NotionTextRichText, text_item)["text"]["link"] = {"url": url}
+            if text_item["type"] == "text":
+                text_item["text"]["link"] = {"url": url}
 
         return children_text
 
@@ -632,10 +629,10 @@ class MistuneNotionRenderer:
 
     def _get_link_text(self, children_text: List[NotionRichText]) -> str:
         """Extract link text."""
-        text_parts = []
+        text_parts: List[str] = []
         for item in children_text:
             if item.get("type") == "text" and "text" in item:
-                text_parts.append(cast(NotionTextRichText, item).get("text", {}).get("content", ""))
+                text_parts.append(item.get("text", {}).get("content", ""))
         return "".join(text_parts)
 
     def _render_file_block(self, url: str, link_text: str = "") -> None:

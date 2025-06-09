@@ -12,13 +12,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pyright>=1.1.345", "types-requests>=2.25.0"]
-
-[tool.pyright]
-type-checking-mode = "strict"
-
-[tool.uv]
-package = true
+dev = ["pyright>=1.1.345", "ruff>=0.11.13"]
 
 [project.scripts]
 notionit = "notionit.__main__:main"
@@ -29,3 +23,12 @@ include = ["notionit", "notionit.*"]
 
 [tool.setuptools.package-data]
 "notionit" = ["py.typed"]
+
+[tool.pyright]
+type-checking-mode = "strict"
+venv = ".venv"
+venvPath = "."
+ignore = ["build", "dist"]
+
+[tool.uv]
+package = true
