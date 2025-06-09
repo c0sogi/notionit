@@ -10,7 +10,7 @@ import json
 import re
 import time
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Union, cast
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Union
 
 import mistune
 import requests
@@ -137,58 +137,87 @@ class NotionUploader:
         except Exception as e:
             # Fall back to the legacy parser on failure
             print(f"Failed to parse with Mistune, falling back to legacy method: {e}")
-            # Cast the basic blocks to extended blocks for compatibility
-            basic_blocks = self._parse_markdown_to_blocks(markdown_content)
-            return cast(List[NotionExtendedBlock], basic_blocks)
+            return list(self.parse_markdown_to_basic_blocks(markdown_content))
 
-    def _upload_markdown_file(self, file_path: str, parent_page_id: str, page_title: Optional[str] = None) -> NotionAPIResponse:
+    def parse_markdown_to_basic_blocks(self, markdown_content: str) -> List[NotionBasicBlock]:
         """
-        Upload a Markdown file to Notion.
+        Convert Markdown to Notion blocks.
 
         Args:
-            file_path: Path to the Markdown file
-            parent_page_id: Parent page ID
-            page_title: Page title (defaults to file name)
+            markdown_content: Markdown text
 
         Returns:
-            Notion API response
-
-        Raises:
-            FileNotFoundError: When the file does not exist
+            List of Notion blocks
         """
-        path = Path(file_path)
+        blocks: List[NotionBasicBlock] = []
+        lines = markdown_content.split("\n")
+        i = 0
 
-        if not path.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
+        while i < len(lines):
+            line = lines[i].strip()
 
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read()
+            # Skip empty lines
+            if not line:
+                i += 1
+                continue
 
-        if page_title is None:
-            page_title = path.stem
+            # Handle block equations ($$...$$)
+            if line.startswith("$$") and line.endswith("$$"):
+                equation = line[2:-2].strip()
+                blocks.append(self._create_equation_block(equation))
+                i += 1
+                continue
 
-        blocks = self.parse_markdown_to_blocks(content)
+            # Multi-line block equation
+            if line.startswith("$$"):
+                equation_lines = [line[2:]]
+                i += 1
+                while i < len(lines) and not lines[i].strip().endswith("$$"):
+                    equation_lines.append(lines[i])
+                    i += 1
+                if i < len(lines):
+                    equation_lines.append(lines[i].strip()[:-2])
+                    i += 1
 
-        # Split into chunks of 100 blocks (API limit)
-        block_chunks = [blocks[i : i + 100] for i in range(0, len(blocks), 100)]
+                equation = "\n".join(equation_lines).strip()
+                blocks.append(self._create_equation_block(equation))
+                continue
 
-        # Create page with the first chunk
-        result = self.create_page(
-            parent_page_id=parent_page_id,
-            title=page_title,
-            blocks=block_chunks[0] if block_chunks else [],
-        )
+            # Code block
+            if line.startswith("```"):
+                language = line[3:].strip()
+                code_lines = []
+                i += 1
+                while i < len(lines) and not lines[i].startswith("```"):
+                    code_lines.append(lines[i])
+                    i += 1
+                if i < len(lines):
+                    i += 1  # closing fence
+                code = "\n".join(code_lines)
+                blocks.append(self._create_code_block(code, language))
+                continue
 
-        if "id" not in result:
-            return result
+            # Heading
+            if line.startswith("#"):
+                level = len(line) - len(line.lstrip("#"))
+                text = line.lstrip("# ").strip()
+                blocks.append(self._create_heading_block(text, level))
+                i += 1
+                continue
 
-        page_id = result["id"]
+            # Regular paragraph (may include inline math)
+            paragraph_lines = [line]
+            i += 1
 
-        # Append remaining chunks as children
-        for chunk in block_chunks[1:]:
-            self._append_blocks_to_page(page_id, chunk)
+            # Collect subsequent lines in the same paragraph
+            while i < len(lines) and lines[i].strip() and not self._is_special_line(lines[i]):
+                paragraph_lines.append(lines[i].strip())
+                i += 1
 
-        return result
+            paragraph_text = " ".join(paragraph_lines)
+            blocks.append(self._create_paragraph_block(paragraph_text))
+
+        return blocks
 
     def check_existing_pages_with_title(self, title: str) -> List[NotionSearchResultPage]:
         """
@@ -318,7 +347,7 @@ class NotionUploader:
                 return {"status": "skipped"}
 
         # Proceed with normal upload
-        result = self._upload_markdown_file(file_path, parent_page_id, page_title)
+        result = self._upload_markdown_file(file_path=file_path, parent_page_id=parent_page_id, page_title=page_title)
         return result
 
     def batch_upload_files(
@@ -347,7 +376,7 @@ class NotionUploader:
                 print(f"\n📁 {i + 1}/{len(file_paths)}: {file_path}")
 
             try:
-                result = self.upload_markdown_file(file_path, parent_page_id, duplicate_strategy=duplicate_strategy)
+                result = self.upload_markdown_file(file_path=file_path, parent_page_id=parent_page_id, duplicate_strategy=duplicate_strategy)
                 results.append(result)
 
                 if is_success_result(result):
@@ -412,73 +441,54 @@ class NotionUploader:
         success_rate = (summary["success"] / summary["total"] * 100) if summary["total"] > 0 else 0
         print(f"  Success rate: {success_rate:.1f}%")
 
-    ###
-
-    def _parse_markdown_to_blocks(self, markdown_content: str) -> List[NotionBasicBlock]:
+    def _upload_markdown_file(self, file_path: str, parent_page_id: str, page_title: Optional[str] = None) -> NotionAPIResponse:
         """
-        Convert Markdown to Notion blocks.
+        Upload a Markdown file to Notion.
 
         Args:
-            markdown_content: Markdown text
+            file_path: Path to the Markdown file
+            parent_page_id: Parent page ID
+            page_title: Page title (defaults to file name)
 
         Returns:
-            List of Notion blocks
+            Notion API response
+
+        Raises:
+            FileNotFoundError: When the file does not exist
         """
-        blocks: List[NotionBasicBlock] = []
-        lines = markdown_content.split("\n")
-        i = 0
+        path = Path(file_path)
 
-        while i < len(lines):
-            line = lines[i].strip()
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
 
-            # Skip empty lines
-            if not line:
-                i += 1
-                continue
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
 
-            # Handle block equations ($$...$$)
-            if line.startswith("$$") and line.endswith("$$"):
-                equation = line[2:-2].strip()
-                blocks.append(self._create_equation_block(equation))
-                i += 1
-                continue
+        if page_title is None:
+            page_title = path.stem
 
-            # Multi-line block equation
-            if line.startswith("$$"):
-                equation_lines = [line[2:]]
-                i += 1
-                while i < len(lines) and not lines[i].strip().endswith("$$"):
-                    equation_lines.append(lines[i])
-                    i += 1
-                if i < len(lines):
-                    equation_lines.append(lines[i].strip()[:-2])
-                    i += 1
+        blocks = self.parse_markdown_to_blocks(content)
 
-                equation = "\n".join(equation_lines).strip()
-                blocks.append(self._create_equation_block(equation))
-                continue
+        # Split into chunks of 100 blocks (API limit)
+        block_chunks = [blocks[i : i + 100] for i in range(0, len(blocks), 100)]
 
-            # Heading
-            if line.startswith("#"):
-                level = len(line) - len(line.lstrip("#"))
-                text = line.lstrip("# ").strip()
-                blocks.append(self._create_heading_block(text, level))
-                i += 1
-                continue
+        # Create page with the first chunk
+        result = self.create_page(
+            parent_page_id=parent_page_id,
+            title=page_title,
+            blocks=block_chunks[0] if block_chunks else [],
+        )
 
-            # Regular paragraph (may include inline math)
-            paragraph_lines = [line]
-            i += 1
+        if "id" not in result:
+            return result
 
-            # Collect subsequent lines in the same paragraph
-            while i < len(lines) and lines[i].strip() and not self._is_special_line(lines[i]):
-                paragraph_lines.append(lines[i].strip())
-                i += 1
+        page_id = result["id"]
 
-            paragraph_text = " ".join(paragraph_lines)
-            blocks.append(self._create_paragraph_block(paragraph_text))
+        # Append remaining chunks as children
+        for chunk in block_chunks[1:]:
+            self._append_blocks_to_page(page_id, chunk)
 
-        return blocks
+        return result
 
     def _parse_text_formatting(self, text: str) -> List[NotionTextRichText]:
         """Parse basic text formatting such as bold or italic."""

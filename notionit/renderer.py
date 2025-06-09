@@ -19,8 +19,12 @@ from .types import (
     NotionEquationBlock,
     NotionExtendedBlock,
     NotionFileBlock,
+    NotionHeading1Block,
+    NotionHeading2Block,
+    NotionHeading3Block,
     NotionImageBlock,
     NotionNumberedListItemBlock,
+    NotionParagraphBlock,
     NotionQuoteBlock,
     NotionRichText,
     NotionTableBlock,
@@ -240,6 +244,7 @@ class MistuneNotionRenderer:
         level = node.get("attrs", {}).get("level", 1)
         rich_text = self._render_inline_children(node.get("children", []))
 
+        block: Union[NotionHeading1Block, NotionHeading2Block, NotionHeading3Block]
         if level == 1:
             block = {"object": "block", "type": "heading_1", "heading_1": {"rich_text": rich_text}}
         elif level == 2:
@@ -247,15 +252,16 @@ class MistuneNotionRenderer:
         else:  # level >= 3
             block = {"object": "block", "type": "heading_3", "heading_3": {"rich_text": rich_text}}
 
-        self.blocks.append(cast(NotionExtendedBlock, block))
+        self.blocks.append(block)
 
     def _render_paragraph(self, node: Dict[str, Any]) -> None:
         """Render a paragraph node."""
         rich_text = self._render_inline_children(node.get("children", []))
 
+        block: NotionParagraphBlock
         if rich_text:  # Skip empty paragraphs
             block = {"object": "block", "type": "paragraph", "paragraph": {"rich_text": rich_text}}
-            self.blocks.append(cast(NotionExtendedBlock, block))
+            self.blocks.append(block)
 
     def _render_list(self, node: Dict[str, Any]) -> None:
         """Render a list node."""
@@ -278,19 +284,19 @@ class MistuneNotionRenderer:
 
         if rich_text:
             if is_ordered:
-                block = {
+                numbered_list_block: NotionNumberedListItemBlock = {
                     "object": "block",
                     "type": "numbered_list_item",
                     "numbered_list_item": {"rich_text": rich_text},
                 }
-                self.blocks.append(cast(NotionNumberedListItemBlock, block))
+                self.blocks.append(numbered_list_block)
             else:
-                block = {
+                bullet_list_block: NotionBulletedListItemBlock = {
                     "object": "block",
                     "type": "bulleted_list_item",
                     "bulleted_list_item": {"rich_text": rich_text},
                 }
-                self.blocks.append(cast(NotionBulletedListItemBlock, block))
+                self.blocks.append(bullet_list_block)
 
     def _render_code_block(self, node: Dict[str, Any]) -> None:
         """Render a code block."""
@@ -299,23 +305,18 @@ class MistuneNotionRenderer:
 
         # Create proper rich text for code content
         code_rich_text: List[NotionRichText] = [
-            cast(
-                NotionTextRichText,
-                {
-                    "type": "text",
-                    "text": {"content": code, "link": None},
-                    "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"},
-                },
-            )
+            {
+                "type": "text",
+                "text": {"content": code, "link": None},
+                "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"},
+            },
         ]
-
-        block = {
+        block: NotionCodeBlock = {
             "object": "block",
             "type": "code",
             "code": {"rich_text": code_rich_text, "language": cast(NotionCodeLanguage, self._map_language(language))},
         }
-
-        self.blocks.append(cast(NotionCodeBlock, block))
+        self.blocks.append(block)
 
     def _render_block_quote(self, node: Dict[str, Any]) -> None:
         """Render a block quote."""
@@ -326,13 +327,13 @@ class MistuneNotionRenderer:
                 rich_text.extend(self._render_inline_children(child.get("children", [])))
 
         if rich_text:
-            block = {"object": "block", "type": "quote", "quote": {"rich_text": rich_text}}
-            self.blocks.append(cast(NotionQuoteBlock, block))
+            block: NotionQuoteBlock = {"object": "block", "type": "quote", "quote": {"rich_text": rich_text}}
+            self.blocks.append(block)
 
     def _render_divider(self) -> None:
         """Render a divider."""
-        block = {"object": "block", "type": "divider", "divider": {}}
-        self.blocks.append(cast(NotionDividerBlock, block))
+        block: NotionDividerBlock = {"object": "block", "type": "divider", "divider": {}}
+        self.blocks.append(block)
 
     def _render_table(self, node: Dict[str, Any]) -> None:
         """Render a table by creating actual Notion table blocks."""
@@ -352,7 +353,7 @@ class MistuneNotionRenderer:
                 table_row_blocks.append(row_block)
 
             # Create table block with children
-            table_block = {
+            table_block: NotionTableBlock = {
                 "object": "block",
                 "type": "table",
                 "table": {
@@ -362,8 +363,7 @@ class MistuneNotionRenderer:
                     "children": table_row_blocks,
                 },
             }
-
-            self.blocks.append(cast(NotionTableBlock, table_block))
+            self.blocks.append(table_block)
 
         except Exception as e:
             # Fallback to code block if table parsing fails
@@ -481,7 +481,7 @@ class MistuneNotionRenderer:
 
     def _render_empty_table_fallback(self) -> None:
         """Handle an empty table."""
-        block = {
+        block: NotionParagraphBlock = {
             "object": "block",
             "type": "paragraph",
             "paragraph": {
@@ -494,14 +494,14 @@ class MistuneNotionRenderer:
                 ]
             },
         }
-        self.blocks.append(cast(NotionExtendedBlock, block))
+        self.blocks.append(block)
 
     def _render_math_block(self, node: Dict[str, Any]) -> None:
         """Render a math block."""
         equation = node.get("raw", "")
 
-        block = {"object": "block", "type": "equation", "equation": {"expression": equation}}
-        self.blocks.append(cast(NotionEquationBlock, block))
+        block: NotionEquationBlock = {"object": "block", "type": "equation", "equation": {"expression": equation}}
+        self.blocks.append(block)
 
     def _render_unknown_node(self, node: Dict[str, Any]) -> None:
         """Render unknown nodes as paragraphs."""
@@ -545,16 +545,11 @@ class MistuneNotionRenderer:
 
     def _render_text(self, node: Dict[str, Any]) -> NotionTextRichText:
         """Render plain text."""
-        content = node.get("raw", "")
-
-        return cast(
-            NotionTextRichText,
-            {
-                "type": "text",
-                "text": {"content": content, "link": None},
-                "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"},
-            },
-        )
+        return {
+            "type": "text",
+            "text": {"content": node.get("raw", ""), "link": None},
+            "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"},
+        }
 
     def _render_strong(self, node: Dict[str, Any]) -> List[NotionRichText]:
         """Render bold text."""
@@ -563,7 +558,7 @@ class MistuneNotionRenderer:
         # Apply bold to all child text
         for text_item in children_text:
             if text_item.get("type") == "text" and "annotations" in text_item:
-                cast(NotionTextRichText, text_item)["annotations"]["bold"] = True
+                text_item["annotations"]["bold"] = True
 
         return children_text
 
@@ -574,7 +569,7 @@ class MistuneNotionRenderer:
         # Apply italic to all child text
         for text_item in children_text:
             if text_item.get("type") == "text" and "annotations" in text_item:
-                cast(NotionTextRichText, text_item)["annotations"]["italic"] = True
+                text_item["annotations"]["italic"] = True
 
         return children_text
 
@@ -585,7 +580,7 @@ class MistuneNotionRenderer:
         # Apply strikethrough to all child text
         for text_item in children_text:
             if text_item.get("type") == "text" and "annotations" in text_item:
-                cast(NotionTextRichText, text_item)["annotations"]["strikethrough"] = True
+                text_item["annotations"]["strikethrough"] = True
 
         return children_text
 
@@ -593,14 +588,11 @@ class MistuneNotionRenderer:
         """Render inline code."""
         content = node.get("raw", "")
 
-        return cast(
-            NotionTextRichText,
-            {
-                "type": "text",
-                "text": {"content": content, "link": None},
-                "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": True, "color": "default"},
-            },
-        )
+        return {
+            "type": "text",
+            "text": {"content": content, "link": None},
+            "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": True, "color": "default"},
+        }
 
     def _render_link(self, node: Dict[str, Any]) -> List[NotionRichText]:
         """Render a link; file links become file blocks."""
@@ -777,7 +769,7 @@ class MistuneNotionRenderer:
     def _render_image_fallback(self, url: str, alt_text: str) -> None:
         """Fallback to text when image rendering fails."""
         content = f"[Image: {alt_text}]({url})" if alt_text else f"[Image]({url})"
-        block = {
+        block: NotionParagraphBlock = {
             "object": "block",
             "type": "paragraph",
             "paragraph": {
@@ -790,7 +782,7 @@ class MistuneNotionRenderer:
                 ]
             },
         }
-        self.blocks.append(cast(NotionExtendedBlock, block))
+        self.blocks.append(block)
 
     def _is_local_file_path(self, path: str) -> bool:
         """Return ``True`` if ``path`` is a local file path."""
@@ -814,10 +806,7 @@ class MistuneNotionRenderer:
 
     def _render_break(self) -> NotionTextRichText:
         """Render a line break."""
-        return cast(
-            NotionTextRichText,
-            {"type": "text", "text": {"content": "\n", "link": None}, "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"}},
-        )
+        return {"type": "text", "text": {"content": "\n", "link": None}, "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"}}
 
     def _map_language(self, language: str) -> str:
         """Map a language code to the format Notion expects."""

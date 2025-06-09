@@ -305,6 +305,7 @@ NotionBasicBlock = Union[
     NotionHeading2Block,
     NotionHeading3Block,
     NotionParagraphBlock,
+    NotionCodeBlock,
 ]
 
 NotionExtendedBlock = Union[
