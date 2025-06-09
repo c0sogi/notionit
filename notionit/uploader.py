@@ -457,6 +457,20 @@ class NotionUploader:
                 blocks.append(self._create_equation_block(equation))
                 continue
 
+            # 코드 블록 처리
+            if line.startswith("```"):
+                language = line[3:].strip()
+                code_lines = []
+                i += 1
+                while i < len(lines) and not lines[i].startswith("```"):
+                    code_lines.append(lines[i])
+                    i += 1
+                if i < len(lines):
+                    i += 1  # closing fence
+                code = "\n".join(code_lines)
+                blocks.append(self._create_code_block(code, language))
+                continue
+
             # 헤더 처리
             if line.startswith("#"):
                 level = len(line) - len(line.lstrip("#"))
