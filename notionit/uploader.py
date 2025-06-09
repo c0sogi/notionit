@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-고급 Notion 마크다운 업로더
-코드 블록, 수식 정리, 디버깅 출력 등 고급 기능을 지원합니다.
+Advanced Notion Markdown uploader.
+
+Supports code blocks, equation normalization, debug output and other advanced features.
 """
 
 import hashlib
@@ -9,7 +10,7 @@ import json
 import re
 import time
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Union, cast
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Union
 
 import mistune
 import requests
@@ -41,7 +42,7 @@ from .types import (
 
 
 class NotionUploader:
-    """고급 Notion 마크다운 업로더"""
+    """Advanced Notion Markdown uploader."""
 
     def __init__(
         self,
@@ -55,11 +56,11 @@ class NotionUploader:
         hard_wrap: bool = False,
     ) -> None:
         """
-        업로더 초기화
+        Initialize the uploader.
 
         Args:
-            token: Notion API 토큰
-            debug: 디버깅 출력 활성화 여부
+            token: Notion API token
+            debug: Enable debug output
         """
         _notion_version = notion_version() if callable(notion_version) else notion_version
         _base_url = base_url() if callable(base_url) else base_url
@@ -76,128 +77,157 @@ class NotionUploader:
 
     def create_page(self, parent_page_id: str, title: str, blocks: Sequence[NotionExtendedBlock]) -> NotionAPIResponse:
         """
-        새 Notion 페이지 생성
+        Create a new Notion page.
 
         Args:
-            parent_page_id: 부모 페이지 ID
-            title: 페이지 제목
-            blocks: Notion 블록 리스트
+            parent_page_id: Parent page ID
+            title: Page title
+            blocks: List of Notion blocks
 
         Returns:
-            Notion API 응답
+            Notion API response
         """
         url = safe_url_join(self.base_url, "pages")
         data: NotionExtendedCreatePageRequest = {"parent": {"page_id": parent_page_id}, "properties": {"title": {"title": [{"text": {"content": title}}]}}, "children": list(blocks)}
 
         if self.debug:
-            print(f"🔍 생성할 블록 수: {len(blocks)}")
+            print(f"🔍 Blocks to create: {len(blocks)}")
             for i, block in enumerate(blocks):
                 if block["type"] == "equation":
-                    print(f"  📐 수식 블록 {i + 1}: {block['equation']['expression']}")
+                    print(f"  📐 Equation block {i + 1}: {block['equation']['expression']}")
                 else:
-                    print(f"  📝 {block['type']} 블록 {i + 1}")
+                    print(f"  📝 {block['type']} block {i + 1}")
 
         response = requests.post(url, headers=self.headers, json=data)
         result = response.json()
 
         if response.status_code != 200 and self.debug:
-            print(f"❌ API 오류 (Status: {response.status_code}):")
+            print(f"❌ API error (Status: {response.status_code}):")
             print(json.dumps(result, indent=2, ensure_ascii=False))
 
         return result
 
     def parse_markdown_to_blocks(self, markdown_content: str) -> List[NotionExtendedBlock]:
         """
-        마크다운 텍스트를 Notion 블록으로 파싱 (Mistune 사용)
+        Parse Markdown text into Notion blocks using Mistune.
 
         Args:
-            markdown_content: 마크다운 텍스트
+            markdown_content: Markdown text
 
         Returns:
-            Notion 블록 리스트
+            List of Notion blocks
         """
         try:
-            # Mistune으로 파싱 (튜플 반환값에서 AST 추출)
+            # Parse with Mistune (extract AST from tuple result)
             parse_result = self.markdown_parser.parse(markdown_content)
             if isinstance(parse_result, tuple):
                 ast_nodes = parse_result[0]
             else:
                 ast_nodes = parse_result
 
-            # AST가 문자열인 경우 처리
+            # Handle case where AST is a string
             if isinstance(ast_nodes, str):
-                raise TypeError("Mistune 파싱 결과가 문자열입니다.")
+                raise TypeError("Mistune returned a string")
 
-            # AST를 Notion 블록으로 변환
+            # Convert AST to Notion blocks
             blocks = self.notion_renderer.render_ast(ast_nodes)
 
             return blocks
 
         except Exception as e:
-            # 파싱 실패 시 기존 방식으로 폴백
-            print(f"Mistune 파싱 실패, 기존 방식 사용: {e}")
-            # Cast the basic blocks to extended blocks for compatibility
-            basic_blocks = self._parse_markdown_to_blocks(markdown_content)
-            return cast(List[NotionExtendedBlock], basic_blocks)
+            # Fall back to the legacy parser on failure
+            print(f"Failed to parse with Mistune, falling back to legacy method: {e}")
+            return list(self.parse_markdown_to_basic_blocks(markdown_content))
 
-    def _upload_markdown_file(self, file_path: str, parent_page_id: str, page_title: Optional[str] = None) -> NotionAPIResponse:
+    def parse_markdown_to_basic_blocks(self, markdown_content: str) -> List[NotionBasicBlock]:
         """
-        마크다운 파일을 Notion에 업로드
+        Convert Markdown to Notion blocks.
 
         Args:
-            file_path: 마크다운 파일 경로
-            parent_page_id: 부모 페이지 ID
-            page_title: 페이지 제목 (None이면 파일명 사용)
+            markdown_content: Markdown text
 
         Returns:
-            Notion API 응답
-
-        Raises:
-            FileNotFoundError: 파일이 존재하지 않을 때
+            List of Notion blocks
         """
-        path = Path(file_path)
+        blocks: List[NotionBasicBlock] = []
+        lines = markdown_content.split("\n")
+        i = 0
 
-        if not path.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
+        while i < len(lines):
+            line = lines[i].strip()
 
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read()
+            # Skip empty lines
+            if not line:
+                i += 1
+                continue
 
-        if page_title is None:
-            page_title = path.stem
+            # Handle block equations ($$...$$)
+            if line.startswith("$$") and line.endswith("$$"):
+                equation = line[2:-2].strip()
+                blocks.append(self._create_equation_block(equation))
+                i += 1
+                continue
 
-        blocks = self.parse_markdown_to_blocks(content)
+            # Multi-line block equation
+            if line.startswith("$$"):
+                equation_lines = [line[2:]]
+                i += 1
+                while i < len(lines) and not lines[i].strip().endswith("$$"):
+                    equation_lines.append(lines[i])
+                    i += 1
+                if i < len(lines):
+                    equation_lines.append(lines[i].strip()[:-2])
+                    i += 1
 
-        # 100개 블록 제한으로 청크 분할
-        block_chunks = [blocks[i : i + 100] for i in range(0, len(blocks), 100)]
+                equation = "\n".join(equation_lines).strip()
+                blocks.append(self._create_equation_block(equation))
+                continue
 
-        # 첫 번째 청크로 페이지 생성
-        result = self.create_page(
-            parent_page_id=parent_page_id,
-            title=page_title,
-            blocks=block_chunks[0] if block_chunks else [],
-        )
+            # Code block
+            if line.startswith("```"):
+                language = line[3:].strip()
+                code_lines = []
+                i += 1
+                while i < len(lines) and not lines[i].startswith("```"):
+                    code_lines.append(lines[i])
+                    i += 1
+                if i < len(lines):
+                    i += 1  # closing fence
+                code = "\n".join(code_lines)
+                blocks.append(self._create_code_block(code, language))
+                continue
 
-        if "id" not in result:
-            return result
+            # Heading
+            if line.startswith("#"):
+                level = len(line) - len(line.lstrip("#"))
+                text = line.lstrip("# ").strip()
+                blocks.append(self._create_heading_block(text, level))
+                i += 1
+                continue
 
-        page_id = result["id"]
+            # Regular paragraph (may include inline math)
+            paragraph_lines = [line]
+            i += 1
 
-        # 나머지 청크들을 자식으로 추가
-        for chunk in block_chunks[1:]:
-            self._append_blocks_to_page(page_id, chunk)
+            # Collect subsequent lines in the same paragraph
+            while i < len(lines) and lines[i].strip() and not self._is_special_line(lines[i]):
+                paragraph_lines.append(lines[i].strip())
+                i += 1
 
-        return result
+            paragraph_text = " ".join(paragraph_lines)
+            blocks.append(self._create_paragraph_block(paragraph_text))
+
+        return blocks
 
     def check_existing_pages_with_title(self, title: str) -> List[NotionSearchResultPage]:
         """
-        동일한 제목을 가진 기존 페이지들을 검색
+        Search for existing pages with the same title.
 
         Args:
-            title: 검색할 페이지 제목
+            title: Page title to search for
 
         Returns:
-            동일한 제목을 가진 페이지 리스트
+            List of pages with the same title
         """
         url = safe_url_join(self.base_url, "search")
         search_data = {"query": title, "filter": {"value": "page", "property": "object"}}
@@ -206,7 +236,7 @@ class NotionUploader:
         result: NotionSearchResponse = response.json()
 
         if "results" in result:
-            # 정확한 제목 매치만 필터링
+            # Filter only exact title matches
             exact_matches: List[NotionSearchResultPage] = []
             for page in result["results"]:
                 if "properties" in page and "title" in page["properties"]:
@@ -221,14 +251,14 @@ class NotionUploader:
 
     def generate_unique_title(self, base_title: str, strategy: str = "timestamp") -> str:
         """
-        고유한 제목 생성
+        Generate a unique title.
 
         Args:
-            base_title: 기본 제목
-            strategy: 고유화 전략 ("timestamp", "counter", "hash")
+            base_title: Base title
+            strategy: Uniqueness strategy ("timestamp", "counter", "hash")
 
         Returns:
-            고유한 제목
+            Unique title
         """
         if strategy == "timestamp":
             timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -247,7 +277,7 @@ class NotionUploader:
                 counter += 1
 
         elif strategy == "hash":
-            # 파일 내용 기반 해시
+            # Hash based on file content
             file_hash = hashlib.md5(base_title.encode()).hexdigest()[:8]
             return f"{base_title} ({file_hash})"
 
@@ -261,36 +291,36 @@ class NotionUploader:
         duplicate_strategy: Optional[DuplicateStrategy] = None,
     ) -> UploadResult:
         """
-        마크다운 파일 업로드
+        Upload a Markdown file.
 
         Args:
-            file_path: 마크다운 파일 경로
-            parent_page_id: 부모 페이지 ID
-            page_title: 페이지 제목 (None이면 파일명 사용)
-            duplicate_strategy: 중복 처리 전략
+            file_path: Path to the Markdown file
+            parent_page_id: Parent page ID
+            page_title: Page title (defaults to file name)
+            duplicate_strategy: Strategy for handling duplicates
 
         Returns:
-            업로드 결과 (성공 응답 또는 상태)
+            Upload result (success response or status)
         """
         path = Path(file_path)
 
         if page_title is None:
             page_title = path.stem
 
-        # 기존 페이지 확인
+        # Check for existing pages with the same title
         if duplicate_strategy is not None and (existing_pages := self.check_existing_pages_with_title(page_title)):
             if self.debug:
-                print(f"⚠️  동일한 제목 '{page_title}'을 가진 페이지가 {len(existing_pages)}개 존재합니다.")
+                print(f"⚠️  {len(existing_pages)} pages with the same title '{page_title}' exist.")
 
             if duplicate_strategy == "ask":
-                print(f"⚠️  동일한 제목 '{page_title}'을 가진 페이지가 {len(existing_pages)}개 존재합니다.")
-                print("어떻게 처리하시겠습니까?")
-                print("1. 타임스탬프 추가하여 새 페이지 생성")
-                print("2. 번호 추가하여 새 페이지 생성")
-                print("3. 기존 페이지 무시하고 새 페이지 생성")
-                print("4. 업로드 취소")
+                print(f"⚠️  {len(existing_pages)} pages with the same title '{page_title}' exist.")
+                print("How would you like to proceed?")
+                print("1. Add timestamp and create a new page")
+                print("2. Add counter and create a new page")
+                print("3. Ignore and create anyway")
+                print("4. Cancel upload")
 
-                choice = input("선택 (1-4): ").strip()
+                choice = input("Choose (1-4): ").strip()
                 if choice == "1":
                     duplicate_strategy = "timestamp"
                 elif choice == "2":
@@ -298,26 +328,26 @@ class NotionUploader:
                 elif choice == "3":
                     duplicate_strategy = "create_anyway"
                 else:
-                    print("❌ 업로드가 취소되었습니다.")
+                    print("❌ Upload cancelled.")
                     return {"status": "cancelled"}
 
             if duplicate_strategy == "timestamp":
                 page_title = self.generate_unique_title(page_title, "timestamp")
                 if self.debug:
-                    print(f"📝 새 제목: {page_title}")
+                    print(f"📝 New title: {page_title}")
 
             elif duplicate_strategy == "counter":
                 page_title = self.generate_unique_title(page_title, "counter")
                 if self.debug:
-                    print(f"📝 새 제목: {page_title}")
+                    print(f"📝 New title: {page_title}")
 
             elif duplicate_strategy == "skip":
                 if self.debug:
-                    print("⏭️  업로드를 건너뜁니다.")
+                    print("⏭️  Skipping upload.")
                 return {"status": "skipped"}
 
-        # 일반 업로드 진행
-        result = self._upload_markdown_file(file_path, parent_page_id, page_title)
+        # Proceed with normal upload
+        result = self._upload_markdown_file(file_path=file_path, parent_page_id=parent_page_id, page_title=page_title)
         return result
 
     def batch_upload_files(
@@ -328,16 +358,16 @@ class NotionUploader:
         delay_seconds: float = 1.0,
     ) -> List[UploadResult]:
         """
-        여러 파일을 일괄 업로드
+        Upload multiple files in batch.
 
         Args:
-            file_paths: 업로드할 파일 경로 리스트
-            parent_page_id: 부모 페이지 ID
-            duplicate_strategy: 중복 처리 전략
-            delay_seconds: 파일 간 지연 시간 (초)
+            file_paths: List of file paths to upload
+            parent_page_id: Parent page ID
+            duplicate_strategy: Strategy for handling duplicates
+            delay_seconds: Delay between files in seconds
 
         Returns:
-            업로드 결과 리스트
+            List of upload results
         """
         results: List[UploadResult] = []
 
@@ -346,24 +376,24 @@ class NotionUploader:
                 print(f"\n📁 {i + 1}/{len(file_paths)}: {file_path}")
 
             try:
-                result = self.upload_markdown_file(file_path, parent_page_id, duplicate_strategy=duplicate_strategy)
+                result = self.upload_markdown_file(file_path=file_path, parent_page_id=parent_page_id, duplicate_strategy=duplicate_strategy)
                 results.append(result)
 
                 if is_success_result(result):
                     if self.debug:
-                        print(f"✅ 업로드 성공: {result.get('id', '')}")
+                        print(f"✅ Upload successful: {result.get('id', '')}")
                 else:
                     if self.debug:
-                        print(f"⚠️  업로드 결과: {result.get('status', 'unknown')}")
+                        print(f"⚠️  Upload status: {result.get('status', 'unknown')}")
 
             except Exception as e:
                 if self.debug:
-                    print(f"❌ 업로드 실패: {e}")
-                # 에러를 상태 결과로 변환
+                    print(f"❌ Upload failed: {e}")
+                # Convert the error to a status result
                 error_result: UploadStatusResult = {"status": "cancelled"}
                 results.append(error_result)
 
-            # 다음 파일 업로드 전 지연
+            # Delay before uploading the next file
             if i < len(file_paths) - 1 and delay_seconds > 0:
                 time.sleep(delay_seconds)
 
@@ -371,13 +401,13 @@ class NotionUploader:
 
     def get_upload_summary(self, results: List[UploadResult]) -> Dict[str, int]:
         """
-        업로드 결과 요약 생성
+        Generate a summary of upload results.
 
         Args:
-            results: 업로드 결과 리스트
+            results: List of upload results
 
         Returns:
-            결과 요약 딕셔너리
+            Summary dictionary
         """
         summary = {"total": len(results), "success": 0, "cancelled": 0, "skipped": 0, "failed": 0}
 
@@ -398,105 +428,72 @@ class NotionUploader:
         return summary
 
     def print_upload_summary(self, results: List[UploadResult]) -> None:
-        """업로드 결과 요약 출력"""
+        """Print upload summary."""
         summary = self.get_upload_summary(results)
 
-        print("\n📊 업로드 결과 요약:")
-        print(f"  전체: {summary['total']}개")
-        print(f"  성공: {summary['success']}개 ✅")
-        print(f"  취소: {summary['cancelled']}개 ❌")
-        print(f"  건너뜀: {summary['skipped']}개 ⏭️")
-        print(f"  실패: {summary['failed']}개 🚫")
+        print("\n📊 Upload summary:")
+        print(f"  Total: {summary['total']}")
+        print(f"  Success: {summary['success']} ✅")
+        print(f"  Cancelled: {summary['cancelled']} ❌")
+        print(f"  Skipped: {summary['skipped']} ⏭️")
+        print(f"  Failed: {summary['failed']} 🚫")
 
         success_rate = (summary["success"] / summary["total"] * 100) if summary["total"] > 0 else 0
-        print(f"  성공률: {success_rate:.1f}%")
+        print(f"  Success rate: {success_rate:.1f}%")
 
-    ###
-
-    def _parse_markdown_to_blocks(self, markdown_content: str) -> List[NotionBasicBlock]:
+    def _upload_markdown_file(self, file_path: str, parent_page_id: str, page_title: Optional[str] = None) -> NotionAPIResponse:
         """
-        마크다운을 Notion 블록으로 변환
+        Upload a Markdown file to Notion.
 
         Args:
-            markdown_content: 마크다운 텍스트
+            file_path: Path to the Markdown file
+            parent_page_id: Parent page ID
+            page_title: Page title (defaults to file name)
 
         Returns:
-            Notion 블록 리스트
+            Notion API response
+
+        Raises:
+            FileNotFoundError: When the file does not exist
         """
-        blocks: List[NotionBasicBlock] = []
-        lines = markdown_content.split("\n")
-        i = 0
+        path = Path(file_path)
 
-        while i < len(lines):
-            line = lines[i].strip()
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
 
-            # 빈 라인 건너뛰기
-            if not line:
-                i += 1
-                continue
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
 
-            # 블록 수식 처리 ($$...$$)
-            if line.startswith("$$") and line.endswith("$$"):
-                equation = line[2:-2].strip()
-                blocks.append(self._create_equation_block(equation))
-                i += 1
-                continue
+        if page_title is None:
+            page_title = path.stem
 
-            # 다중 라인 블록 수식
-            if line.startswith("$$"):
-                equation_lines = [line[2:]]
-                i += 1
-                while i < len(lines) and not lines[i].strip().endswith("$$"):
-                    equation_lines.append(lines[i])
-                    i += 1
-                if i < len(lines):
-                    equation_lines.append(lines[i].strip()[:-2])
-                    i += 1
+        blocks = self.parse_markdown_to_blocks(content)
 
-                equation = "\n".join(equation_lines).strip()
-                blocks.append(self._create_equation_block(equation))
-                continue
+        # Split into chunks of 100 blocks (API limit)
+        block_chunks = [blocks[i : i + 100] for i in range(0, len(blocks), 100)]
 
-            # 코드 블록 처리
-            if line.startswith("```"):
-                language = line[3:].strip()
-                code_lines = []
-                i += 1
-                while i < len(lines) and not lines[i].startswith("```"):
-                    code_lines.append(lines[i])
-                    i += 1
-                if i < len(lines):
-                    i += 1  # closing fence
-                code = "\n".join(code_lines)
-                blocks.append(self._create_code_block(code, language))
-                continue
+        # Create page with the first chunk
+        result = self.create_page(
+            parent_page_id=parent_page_id,
+            title=page_title,
+            blocks=block_chunks[0] if block_chunks else [],
+        )
 
-            # 헤더 처리
-            if line.startswith("#"):
-                level = len(line) - len(line.lstrip("#"))
-                text = line.lstrip("# ").strip()
-                blocks.append(self._create_heading_block(text, level))
-                i += 1
-                continue
+        if "id" not in result:
+            return result
 
-            # 일반 단락 처리 (인라인 수식 포함 가능)
-            paragraph_lines = [line]
-            i += 1
+        page_id = result["id"]
 
-            # 같은 단락에 속하는 후속 라인들 수집
-            while i < len(lines) and lines[i].strip() and not self._is_special_line(lines[i]):
-                paragraph_lines.append(lines[i].strip())
-                i += 1
+        # Append remaining chunks as children
+        for chunk in block_chunks[1:]:
+            self._append_blocks_to_page(page_id, chunk)
 
-            paragraph_text = " ".join(paragraph_lines)
-            blocks.append(self._create_paragraph_block(paragraph_text))
-
-        return blocks
+        return result
 
     def _parse_text_formatting(self, text: str) -> List[NotionTextRichText]:
-        """텍스트 서식 파싱 (굵게, 기울임 등)"""
-        # 현재는 단순하게 일반 텍스트로 처리
-        # 향후 **굵게**, *기울임* 등을 처리할 수 있음
+        """Parse basic text formatting such as bold or italic."""
+        # Currently treated as plain text
+        # Future: handle **bold**, *italic*, etc.
         if not text:
             return []
 
@@ -505,7 +502,7 @@ class NotionUploader:
         ]
 
     def _append_blocks_to_page(self, page_id: str, blocks: List[NotionExtendedBlock]) -> NotionAPIResponse:
-        """페이지에 블록들 추가"""
+        """Append blocks to a page."""
         url = safe_url_join(self.base_url, f"blocks/{page_id}/children")
         data = {"children": blocks}
 
@@ -513,7 +510,7 @@ class NotionUploader:
         return response.json()
 
     def _create_code_block(self, code: str, language: str = "") -> NotionCodeBlock:
-        """코드 블록 생성"""
+        """Create a code block."""
         normalized_language = self._normalize_language(language)
 
         return {
@@ -532,8 +529,8 @@ class NotionUploader:
         }
 
     def _create_heading_block(self, text: str, level: int) -> Union[NotionHeading1Block, NotionHeading2Block, NotionHeading3Block]:
-        """헤더 블록 생성"""
-        # Notion은 heading_1, heading_2, heading_3만 지원
+        """Create a heading block."""
+        # Notion supports only heading_1, heading_2 and heading_3
         level = min(level, 3)
 
         rich_text: List[NotionRichText] = [
@@ -548,15 +545,15 @@ class NotionUploader:
             return {"object": "block", "type": "heading_3", "heading_3": {"rich_text": rich_text}}
 
     def _create_paragraph_block(self, text: str) -> NotionParagraphBlock:
-        """단락 블록 생성 (인라인 수식 지원)"""
+        """Create a paragraph block (supports inline math)."""
         rich_text = self._parse_inline_content(text)
         return {"object": "block", "type": "paragraph", "paragraph": {"rich_text": rich_text}}
 
     def _parse_inline_content(self, text: str) -> List[NotionRichText]:
-        """인라인 수식과 서식이 포함된 텍스트 파싱"""
+        """Parse text containing inline math and formatting."""
         rich_text: List[NotionRichText] = []
 
-        # 인라인 수식(단일 $)으로 분할
+        # Split by inline math (single $)
         parts = re.split(r"(\$[^$]+\$)", text)
 
         for part in parts:
@@ -564,28 +561,28 @@ class NotionUploader:
                 continue
 
             if part.startswith("$") and part.endswith("$"):
-                # 인라인 수식
+                # Inline equation
                 equation = part[1:-1]
                 if self.debug:
-                    print(f"      💫 인라인 수식: {equation}")
+                    print(f"      💫 Inline math: {equation}")
                 rich_text.append({"type": "equation", "equation": {"expression": equation}})
             else:
-                # 일반 텍스트
+                # Plain text
                 rich_text.extend(self._parse_text_formatting(part))
 
         return rich_text
 
     def _is_special_line(self, line: str) -> bool:
-        """특별한 블록을 시작하는 라인인지 확인"""
+        """Return True if the line starts a special block."""
         stripped = line.strip()
         return stripped.startswith("#") or stripped == "$$" or stripped.startswith("```")
 
     def _create_equation_block(self, equation: str) -> NotionEquationBlock:
-        """수식 블록 생성 (LaTeX 정리 포함)"""
-        # 수식 정리
+        """Create an equation block (includes LaTeX normalization)."""
+        # Normalize equation
         equation = equation.strip()
 
-        # Notion 호환성을 위한 간단한 치환
+        # Simple replacements for Notion compatibility
         replacements: Dict[str, str] = {
             "\\,": " ",
             "\\;": " ",
@@ -605,15 +602,15 @@ class NotionUploader:
             equation = equation.replace(old, new)
 
         if self.debug:
-            print(f"    🔧 정리된 수식: {equation}")
+            print(f"    🔧 Normalized equation: {equation}")
 
         return {"object": "block", "type": "equation", "equation": {"expression": equation}}
 
     def _normalize_language(self, language: str) -> NotionCodeLanguage:
-        """언어 문자열을 Notion 지원 언어로 정규화"""
+        """Normalize a language string to one supported by Notion."""
         language = language.lower().strip()
 
-        # 언어 매핑 (일반적인 변형들)
+        # Mapping of common aliases
         language_map: Dict[str, NotionCodeLanguage] = {
             "py": "python",
             "js": "javascript",
@@ -661,11 +658,11 @@ class NotionUploader:
             "": "plain text",
         }
 
-        # 직접 매핑 시도
+        # Direct mapping if possible
         if language in language_map:
             return language_map[language]
 
-        # 유효한 Notion 언어인지 확인
+        # Check if the language is a valid Notion language
         valid_languages: List[NotionCodeLanguage] = [
             "abap",
             "arduino",
@@ -745,15 +742,15 @@ class NotionUploader:
             if language == valid_lang:
                 return valid_lang
 
-        # 알 수 없는 언어는 기본값으로
+        # Default to plain text for unknown languages
         return "plain text"
 
 
 def is_success_result(result: UploadResult) -> bool:
-    """결과가 성공적인 API 응답인지 확인"""
+    """Return True if the result is a successful API response."""
     return "id" in result and "status" not in result
 
 
 def is_status_result(result: UploadResult) -> bool:
-    """결과가 상태 결과인지 확인"""
+    """Return True if the result is a status response."""
     return "status" in result

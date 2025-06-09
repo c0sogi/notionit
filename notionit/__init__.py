@@ -6,25 +6,25 @@ import mistune
 from .config import get_config
 from .renderer import MistuneNotionRenderer
 from .types import (
-    # 중복 처리 전략
+    # duplicate handling strategy
     DuplicateStrategy,
-    # API 응답 타입
+    # API response type
     NotionAPIResponse,
-    # 블록 타입
+    # block type
     NotionExtendedBlock,
     UploadResult,
 )
 from .uploader import NotionUploader, is_status_result, is_success_result
 
-# 기본 공개 인터페이스
+# public interface
 __all__ = [
-    # 메인 클래스들
+    # main classes
     "NotionUploader",
     "MistuneNotionRenderer",
-    # 헬퍼 함수들
+    # helper functions
     "is_success_result",
     "is_status_result",
-    # 중요한 타입들
+    # important types
     "get_config",
     "NotionAPIResponse",
     "UploadResult",
@@ -44,14 +44,14 @@ def create_uploader(
     hard_wrap: bool = False,
 ) -> NotionUploader:
     """
-    편의 함수: 업로더 인스턴스 생성
+    Convenience function to create an uploader instance.
 
     Args:
-        token: Notion API 토큰
-        debug: 디버깅 출력 활성화 여부
+        token: Notion API token
+        debug: Enable debug output
 
     Returns:
-        설정된 업로더 인스턴스
+        Configured uploader instance
     """
     return NotionUploader(token=token, base_url=base_url, notion_version=notion_version, debug=debug, renderer=renderer, escape=escape, hard_wrap=hard_wrap, plugins=plugins)
 
@@ -71,17 +71,17 @@ def quick_upload(
     hard_wrap: bool = False,
 ) -> UploadResult:
     """
-    편의 함수: 빠른 업로드
+    Convenience wrapper for quick uploads.
 
     Args:
-        token: Notion API 토큰
-        file_path: 마크다운 파일 경로
-        parent_page_id: 부모 페이지 ID
-        page_title: 페이지 제목 (None이면 파일명 사용)
-        duplicate_strategy: 중복 처리 전략
+        token: Notion API token
+        file_path: Path to the Markdown file
+        parent_page_id: Parent page ID
+        page_title: Page title (defaults to file name)
+        duplicate_strategy: Strategy for handling duplicates
 
     Returns:
-        업로드 결과
+        Upload result
     """
     _parent_page_id = parent_page_id() if callable(parent_page_id) else parent_page_id
     del parent_page_id

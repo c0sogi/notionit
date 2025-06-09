@@ -26,3 +26,6 @@ notionit = "notionit.__main__:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["notionit", "notionit.*"]
+
+[tool.setuptools.package-data]
+"notionit" = ["py.typed"]

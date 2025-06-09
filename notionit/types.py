@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Notion API 타입 정의 모음
-모든 TypedDict, Literal 타입들을 여기에 정의합니다.
+Collection of Notion API type definitions.
+
+All TypedDict and Literal types are defined here.
 """
 
 from typing import Dict, List, Literal, Optional, TypedDict, Union
@@ -304,6 +305,7 @@ NotionBasicBlock = Union[
     NotionHeading2Block,
     NotionHeading3Block,
     NotionParagraphBlock,
+    NotionCodeBlock,
 ]
 
 NotionExtendedBlock = Union[

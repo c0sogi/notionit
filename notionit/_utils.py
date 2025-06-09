@@ -1,17 +1,17 @@
 def safe_url_join(base: str, *paths: str) -> str:
     """
-    슬래시 유무에 상관없이 안전하게 URL을 결합하는 함수
+    Safely join URL parts regardless of trailing slashes.
 
     Args:
-        base: 기본 URL
-        *paths: 결합할 경로들
+        base: Base URL
+        *paths: Additional path segments to join
 
     Returns:
-        올바르게 결합된 URL
+        Properly joined URL
     """
     url = base.rstrip("/")
     for path in paths:
         path = path.strip("/")
-        if path:  # 빈 문자열이 아닌 경우만
+        if path:  # skip empty segments
             url = f"{url}/{path}"
     return url
