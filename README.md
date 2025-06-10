@@ -64,7 +64,7 @@ Default enabled plugins:
 * `def_list`
 * `abbr`
 * `ruby`
-* `math`
+* `math` (via `notionit.math_plugin.notion_math` for single-line $$ and list support)
 
 Customize them via `--plugins` or programmatically.
 

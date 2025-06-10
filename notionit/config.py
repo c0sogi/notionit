@@ -18,6 +18,9 @@ def get_config(key: Literal["notion_base_url", "notion_api_version", "notion_tok
         else:
             raise ValueError("NOTION_TOKEN is not set")
     elif key == "notion_parser_plugins":
-        return environ.get("NOTION_PARSER_PLUGINS", "strikethrough,mark,insert,subscript,superscript,footnotes,table,task_lists,def_list,abbr,ruby,math")
+        return environ.get(
+            "NOTION_PARSER_PLUGINS",
+            "strikethrough,mark,insert,subscript,superscript,footnotes,table,task_lists,def_list,abbr,ruby,notionit.math_plugin.notion_math",
+        )
     else:
         raise ValueError(f"Invalid key: {key}")
