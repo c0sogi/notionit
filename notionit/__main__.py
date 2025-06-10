@@ -1,6 +1,5 @@
 from typing import Literal, Optional
 
-from spargear import ArgumentSpec, BaseArguments, SubcommandSpec
 from rich.progress import (
     BarColumn,
     Progress,
@@ -8,8 +7,10 @@ from rich.progress import (
     TextColumn,
     TimeRemainingColumn,
 )
+from spargear import ArgumentSpec, BaseArguments, SubcommandSpec
 
-from . import DuplicateStrategy, get_config, quick_upload, is_success_result
+from . import DuplicateStrategy, get_config, is_success_result, quick_upload
+from ._utils import format_upload_success_message
 
 BASE_URL = get_config("notion_base_url")
 NOTION_VERSION = get_config("notion_api_version")
@@ -17,8 +18,8 @@ PARSER_PLUGINS = get_config("notion_parser_plugins")
 
 
 class UploadArguments(BaseArguments):
-    file_path: ArgumentSpec[str] = ArgumentSpec(
-        ["file_path"],
+    path_to_markdown: ArgumentSpec[str] = ArgumentSpec(
+        ["path_to_markdown"],
         help="Path to the markdown file to upload.",
         required=True,
     )
@@ -60,15 +61,12 @@ class UploadArguments(BaseArguments):
                 progress.update(task, completed=pct * 100)
 
             response = quick_upload(
-                file_path=self.file_path.unwrap(),
+                file_path=self.path_to_markdown.unwrap(),
                 token=self.token or get_config("notion_token"),
-                parent_page_id=self.parent_page_id
-                or get_config("notion_parent_page_id"),
+                parent_page_id=self.parent_page_id or get_config("notion_parent_page_id"),
                 base_url=self.base_url or BASE_URL,
                 notion_version=self.notion_version or NOTION_VERSION,
-                plugins=self.plugins.split(",")
-                if self.plugins
-                else PARSER_PLUGINS.split(","),
+                plugins=self.plugins.split(",") if self.plugins else PARSER_PLUGINS.split(","),
                 page_title=self.page_title,
                 duplicate_strategy=self.duplicate_strategy,
                 debug=self.debug,
@@ -79,7 +77,7 @@ class UploadArguments(BaseArguments):
             )
 
         if is_success_result(response):
-            print(f"✅ Upload successful: {response.get('id', '')}")
+            print(format_upload_success_message(response.get("id", "")))
         else:
             print(f"⚠️ Upload status: {response.get('status', 'unknown')}")
 

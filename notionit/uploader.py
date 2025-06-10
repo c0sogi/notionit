@@ -15,7 +15,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, Union
 import mistune
 import requests
 
-from ._utils import safe_url_join
+from ._utils import format_upload_success_message, safe_url_join, unwrap_callable
 from .config import get_config
 from .renderer import MistuneNotionRenderer
 from .types import (
@@ -36,6 +36,7 @@ from .types import (
     NotionSearchResultPage,
     NotionSearchTitleTextObject,
     NotionTextRichText,
+    StrOrCallable,
     UploadResult,
     UploadStatusResult,
 )
@@ -46,10 +47,12 @@ class NotionUploader:
 
     def __init__(
         self,
-        token: Union[str, Callable[[], str]] = lambda: get_config("notion_token"),
-        base_url: Union[str, Callable[[], str]] = lambda: get_config("notion_base_url"),
-        notion_version: Union[str, Callable[[], str]] = lambda: get_config("notion_api_version"),
-        plugins: Optional[Union[Iterable[mistune.plugins.PluginRef], Callable[[], Iterable[mistune.plugins.PluginRef]]]] = lambda: get_config("notion_parser_plugins").split(","),
+        token: StrOrCallable = lambda: get_config("notion_token"),
+        base_url: StrOrCallable = lambda: get_config("notion_base_url"),
+        notion_version: StrOrCallable = lambda: get_config("notion_api_version"),
+        plugins: Optional[
+            Union[Iterable[mistune.plugins.PluginRef], Callable[[], Iterable[mistune.plugins.PluginRef]]]
+        ] = lambda: get_config("notion_parser_plugins").split(","),
         debug: bool = False,
         renderer: mistune.RendererRef = "ast",
         escape: bool = True,
@@ -62,18 +65,21 @@ class NotionUploader:
             token: Notion API token
             debug: Enable debug output
         """
-        _notion_version = notion_version() if callable(notion_version) else notion_version
-        _base_url = base_url() if callable(base_url) else base_url
-        _token = token() if callable(token) else token
-        _plugins = plugins() if callable(plugins) else plugins
-        del token, base_url, notion_version, plugins
-
-        self.token: str = _token
+        token = unwrap_callable(token)
+        base_url = unwrap_callable(base_url)
+        notion_version = unwrap_callable(notion_version)
+        self.token: str = token
         self.debug: bool = debug
-        self.base_url: str = _base_url
-        self.headers: Dict[str, str] = {"Authorization": f"Bearer {_token}", "Content-Type": "application/json", "Notion-Version": _notion_version}
-        self.markdown_parser: mistune.Markdown = mistune.create_markdown(renderer=renderer, escape=escape, hard_wrap=hard_wrap, plugins=_plugins)
-        self.notion_renderer = MistuneNotionRenderer(token=_token, base_url=_base_url, notion_version=_notion_version)
+        self.base_url: str = base_url
+        self.headers: Dict[str, str] = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "Notion-Version": notion_version,
+        }
+        self.markdown_parser: mistune.Markdown = mistune.create_markdown(
+            renderer=renderer, escape=escape, hard_wrap=hard_wrap, plugins=unwrap_callable(plugins)
+        )
+        self.notion_renderer = MistuneNotionRenderer(token=token, base_url=base_url, notion_version=notion_version)
 
     def create_page(self, parent_page_id: str, title: str, blocks: Sequence[NotionExtendedBlock]) -> NotionAPIResponse:
         """
@@ -88,7 +94,11 @@ class NotionUploader:
             Notion API response
         """
         url = safe_url_join(self.base_url, "pages")
-        data: NotionExtendedCreatePageRequest = {"parent": {"page_id": parent_page_id}, "properties": {"title": {"title": [{"text": {"content": title}}]}}, "children": list(blocks)}
+        data: NotionExtendedCreatePageRequest = {
+            "parent": {"page_id": parent_page_id},
+            "properties": {"title": {"title": [{"text": {"content": title}}]}},
+            "children": list(blocks),
+        }
 
         if self.debug:
             print(f"🔍 Blocks to create: {len(blocks)}")
@@ -383,12 +393,14 @@ class NotionUploader:
                 print(f"\n📁 {i + 1}/{len(file_paths)}: {file_path}")
 
             try:
-                result = self.upload_markdown_file(file_path=file_path, parent_page_id=parent_page_id, duplicate_strategy=duplicate_strategy)
+                result = self.upload_markdown_file(
+                    file_path=file_path, parent_page_id=parent_page_id, duplicate_strategy=duplicate_strategy
+                )
                 results.append(result)
 
                 if is_success_result(result):
                     if self.debug:
-                        print(f"✅ Upload successful: {result.get('id', '')}")
+                        print(format_upload_success_message(result.get("id") or ""))
                 else:
                     if self.debug:
                         print(f"⚠️  Upload status: {result.get('status', 'unknown')}")
@@ -522,7 +534,18 @@ class NotionUploader:
             return []
 
         return [
-            {"type": "text", "text": {"content": text, "link": None}, "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"}}
+            {
+                "type": "text",
+                "text": {"content": text, "link": None},
+                "annotations": {
+                    "bold": False,
+                    "italic": False,
+                    "strikethrough": False,
+                    "underline": False,
+                    "code": False,
+                    "color": "default",
+                },
+            }
         ]
 
     def _append_blocks_to_page(self, page_id: str, blocks: List[NotionExtendedBlock]) -> NotionAPIResponse:
@@ -545,20 +568,40 @@ class NotionUploader:
                     {
                         "type": "text",
                         "text": {"content": code, "link": None},
-                        "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"},
+                        "annotations": {
+                            "bold": False,
+                            "italic": False,
+                            "strikethrough": False,
+                            "underline": False,
+                            "code": False,
+                            "color": "default",
+                        },
                     }
                 ],
                 "language": normalized_language,
             },
         }
 
-    def _create_heading_block(self, text: str, level: int) -> Union[NotionHeading1Block, NotionHeading2Block, NotionHeading3Block]:
+    def _create_heading_block(
+        self, text: str, level: int
+    ) -> Union[NotionHeading1Block, NotionHeading2Block, NotionHeading3Block]:
         """Create a heading block."""
         # Notion supports only heading_1, heading_2 and heading_3
         level = min(level, 3)
 
         rich_text: List[NotionRichText] = [
-            {"type": "text", "text": {"content": text, "link": None}, "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"}}
+            {
+                "type": "text",
+                "text": {"content": text, "link": None},
+                "annotations": {
+                    "bold": False,
+                    "italic": False,
+                    "strikethrough": False,
+                    "underline": False,
+                    "code": False,
+                    "color": "default",
+                },
+            }
         ]
 
         if level == 1:

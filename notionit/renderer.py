@@ -5,11 +5,12 @@ Notion uploader with full Markdown support powered by Mistune.
 
 import os
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
 from urllib.parse import urlparse
 
 import requests
 
+from ._utils import unwrap_callable
 from .config import get_config
 from .types import (
     NotionBulletedListItemBlock,
@@ -30,6 +31,7 @@ from .types import (
     NotionTableBlock,
     NotionTableRowBlock,
     NotionTextRichText,
+    StrOrCallable,
 )
 
 
@@ -38,17 +40,15 @@ class NotionFileUploader:
 
     def __init__(
         self,
-        token: Union[str, Callable[[], str]] = lambda: get_config("notion_token"),
-        base_url: Union[str, Callable[[], str]] = lambda: get_config("notion_base_url"),
-        notion_version: Union[str, Callable[[], str]] = lambda: get_config("notion_api_version"),
+        token: StrOrCallable = lambda: get_config("notion_token"),
+        base_url: StrOrCallable = lambda: get_config("notion_base_url"),
+        notion_version: StrOrCallable = lambda: get_config("notion_api_version"),
     ):
-        _base_url = base_url() if callable(base_url) else base_url
-        _notion_version = notion_version() if callable(notion_version) else notion_version
-        _token = token() if callable(token) else token
-        del token, base_url, notion_version
-
-        self.base_url: str = _base_url
-        self.headers: Dict[str, str] = {"Authorization": f"Bearer {_token}", "Notion-Version": _notion_version}
+        self.base_url: str = unwrap_callable(base_url)
+        self.headers: Dict[str, str] = {
+            "Authorization": f"Bearer {unwrap_callable(token)}",
+            "Notion-Version": unwrap_callable(notion_version),
+        }
 
     def upload_file(self, file_path: str) -> Optional[str]:
         """Upload a file and return its ``file_upload_id``."""
@@ -192,17 +192,16 @@ class MistuneNotionRenderer:
 
     def __init__(
         self,
-        token: Union[str, Callable[[], str]] = lambda: get_config("notion_token"),
-        base_url: Union[str, Callable[[], str]] = lambda: get_config("notion_base_url"),
-        notion_version: Union[str, Callable[[], str]] = lambda: get_config("notion_api_version"),
+        token: StrOrCallable = lambda: get_config("notion_token"),
+        base_url: StrOrCallable = lambda: get_config("notion_base_url"),
+        notion_version: StrOrCallable = lambda: get_config("notion_api_version"),
     ):
-        _token = token() if callable(token) else token
-        _base_url = base_url() if callable(base_url) else base_url
-        _notion_version = notion_version() if callable(notion_version) else notion_version
-        del token, base_url, notion_version
-
         self.blocks: List[NotionExtendedBlock] = []
-        self.file_uploader = NotionFileUploader(token=_token, base_url=_base_url, notion_version=_notion_version)
+        self.file_uploader = NotionFileUploader(
+            token=unwrap_callable(token),
+            base_url=unwrap_callable(base_url),
+            notion_version=unwrap_callable(notion_version),
+        )
 
     def render_ast(self, ast_nodes: List[Dict[str, Any]]) -> List[NotionExtendedBlock]:
         """Convert AST nodes into Notion blocks."""
@@ -296,13 +295,18 @@ class MistuneNotionRenderer:
 
         if not rich_text:
             # Notion requires at least one text item; use empty string
-            rich_text.append(
-                {
-                    "type": "text",
-                    "text": {"content": "", "link": None},
-                    "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"},
-                }
-            )
+            rich_text.append({
+                "type": "text",
+                "text": {"content": "", "link": None},
+                "annotations": {
+                    "bold": False,
+                    "italic": False,
+                    "strikethrough": False,
+                    "underline": False,
+                    "code": False,
+                    "color": "default",
+                },
+            })
 
         if is_ordered:
             ordered_block: NotionNumberedListItemBlock = {
@@ -344,7 +348,14 @@ class MistuneNotionRenderer:
             {
                 "type": "text",
                 "text": {"content": code, "link": None},
-                "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"},
+                "annotations": {
+                    "bold": False,
+                    "italic": False,
+                    "strikethrough": False,
+                    "underline": False,
+                    "code": False,
+                    "color": "default",
+                },
             },
         ]
         block: NotionCodeBlock = {
@@ -499,7 +510,14 @@ class MistuneNotionRenderer:
                     {
                         "type": "text",
                         "text": {"content": cell_content, "link": None},
-                        "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"},
+                        "annotations": {
+                            "bold": False,
+                            "italic": False,
+                            "strikethrough": False,
+                            "underline": False,
+                            "code": False,
+                            "color": "default",
+                        },
                     }
                 ]
                 if cell_content
@@ -514,7 +532,11 @@ class MistuneNotionRenderer:
         """Fallback rendering when table parsing fails (code block)."""
         table_text = self._extract_table_text(node)
 
-        block = {"object": "block", "type": "code", "code": {"rich_text": [{"type": "text", "text": {"content": table_text}}], "language": "plain text"}}
+        block = {
+            "object": "block",
+            "type": "code",
+            "code": {"rich_text": [{"type": "text", "text": {"content": table_text}}], "language": "plain text"},
+        }
         self.blocks.append(cast(NotionExtendedBlock, block))
 
     def _render_empty_table_fallback(self) -> None:
@@ -527,7 +549,14 @@ class MistuneNotionRenderer:
                     {
                         "type": "text",
                         "text": {"content": "[empty table]", "link": None},
-                        "annotations": {"bold": False, "italic": True, "strikethrough": False, "underline": False, "code": False, "color": "gray"},
+                        "annotations": {
+                            "bold": False,
+                            "italic": True,
+                            "strikethrough": False,
+                            "underline": False,
+                            "code": False,
+                            "color": "gray",
+                        },
                     }
                 ]
             },
@@ -545,7 +574,11 @@ class MistuneNotionRenderer:
         """Render unknown nodes as paragraphs."""
         text = str(node.get("raw", ""))
         if text:
-            block = {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": text}}]}}
+            block = {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": text}}]},
+            }
             self.blocks.append(cast(NotionExtendedBlock, block))
 
     def _render_inline_children(self, children: List[Dict[str, Any]]) -> List[NotionRichText]:
@@ -580,7 +613,14 @@ class MistuneNotionRenderer:
         return {
             "type": "text",
             "text": {"content": node.get("raw", ""), "link": None},
-            "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"},
+            "annotations": {
+                "bold": False,
+                "italic": False,
+                "strikethrough": False,
+                "underline": False,
+                "code": False,
+                "color": "default",
+            },
         }
 
     def _render_strong(self, node: Dict[str, Any]) -> List[NotionRichText]:
@@ -623,7 +663,14 @@ class MistuneNotionRenderer:
         return {
             "type": "text",
             "text": {"content": content, "link": None},
-            "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": True, "color": "default"},
+            "annotations": {
+                "bold": False,
+                "italic": False,
+                "strikethrough": False,
+                "underline": False,
+                "code": True,
+                "color": "default",
+            },
         }
 
     def _render_link(self, node: Dict[str, Any]) -> List[NotionRichText]:
@@ -658,7 +705,25 @@ class MistuneNotionRenderer:
         try:
             parsed = urlparse(url)
             path = parsed.path.lower()
-            file_extensions = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".json", ".zip", ".rar", ".7z", ".mp3", ".wav", ".mp4", ".avi", ".mov"}
+            file_extensions = {
+                ".pdf",
+                ".doc",
+                ".docx",
+                ".xls",
+                ".xlsx",
+                ".ppt",
+                ".pptx",
+                ".txt",
+                ".json",
+                ".zip",
+                ".rar",
+                ".7z",
+                ".mp3",
+                ".wav",
+                ".mp4",
+                ".avi",
+                ".mov",
+            }
             return any(path.endswith(ext) for ext in file_extensions)
         except Exception:
             return False
@@ -684,7 +749,13 @@ class MistuneNotionRenderer:
                         block = {
                             "object": "block",
                             "type": "file",
-                            "file": {"type": "file_upload", "file_upload": {"id": file_upload_id}, "caption": [{"type": "text", "text": {"content": link_text, "link": None}}] if link_text else []},
+                            "file": {
+                                "type": "file_upload",
+                                "file_upload": {"id": file_upload_id},
+                                "caption": [{"type": "text", "text": {"content": link_text, "link": None}}]
+                                if link_text
+                                else [],
+                            },
                         }
                         self.blocks.append(cast(NotionFileBlock, block))
                         return
@@ -698,7 +769,13 @@ class MistuneNotionRenderer:
                 block = {
                     "object": "block",
                     "type": "file",
-                    "file": {"type": "external", "external": {"url": url}, "caption": [{"type": "text", "text": {"content": link_text, "link": None}}] if link_text else []},
+                    "file": {
+                        "type": "external",
+                        "external": {"url": url},
+                        "caption": [{"type": "text", "text": {"content": link_text, "link": None}}]
+                        if link_text
+                        else [],
+                    },
                 }
                 self.blocks.append(cast(NotionFileBlock, block))
             else:
@@ -720,7 +797,14 @@ class MistuneNotionRenderer:
                     {
                         "type": "text",
                         "text": {"content": content, "link": {"url": url} if self._is_valid_url(url) else None},
-                        "annotations": {"bold": False, "italic": True, "strikethrough": False, "underline": False, "code": False, "color": "blue"},
+                        "annotations": {
+                            "bold": False,
+                            "italic": True,
+                            "strikethrough": False,
+                            "underline": False,
+                            "code": False,
+                            "color": "blue",
+                        },
                     }
                 ]
             },
@@ -751,7 +835,14 @@ class MistuneNotionRenderer:
                 {
                     "type": "text",
                     "text": {"content": content, "link": {"url": url}},
-                    "annotations": {"bold": False, "italic": True, "strikethrough": False, "underline": False, "code": False, "color": "gray"},
+                    "annotations": {
+                        "bold": False,
+                        "italic": True,
+                        "strikethrough": False,
+                        "underline": False,
+                        "code": False,
+                        "color": "gray",
+                    },
                 },
             )
         ]
@@ -774,7 +865,13 @@ class MistuneNotionRenderer:
                         block = {
                             "object": "block",
                             "type": "image",
-                            "image": {"type": "file_upload", "file_upload": {"id": file_upload_id}, "caption": [{"type": "text", "text": {"content": alt_text, "link": None}}] if alt_text else []},
+                            "image": {
+                                "type": "file_upload",
+                                "file_upload": {"id": file_upload_id},
+                                "caption": [{"type": "text", "text": {"content": alt_text, "link": None}}]
+                                if alt_text
+                                else [],
+                            },
                         }
                         self.blocks.append(cast(NotionImageBlock, block))
                         return
@@ -788,7 +885,11 @@ class MistuneNotionRenderer:
                 block = {
                     "object": "block",
                     "type": "image",
-                    "image": {"type": "external", "external": {"url": url}, "caption": [{"type": "text", "text": {"content": alt_text, "link": None}}] if alt_text else []},
+                    "image": {
+                        "type": "external",
+                        "external": {"url": url},
+                        "caption": [{"type": "text", "text": {"content": alt_text, "link": None}}] if alt_text else [],
+                    },
                 }
                 self.blocks.append(cast(NotionImageBlock, block))
             else:
@@ -810,7 +911,14 @@ class MistuneNotionRenderer:
                     {
                         "type": "text",
                         "text": {"content": content, "link": {"url": url} if self._is_valid_url(url) else None},
-                        "annotations": {"bold": False, "italic": True, "strikethrough": False, "underline": False, "code": False, "color": "gray"},
+                        "annotations": {
+                            "bold": False,
+                            "italic": True,
+                            "strikethrough": False,
+                            "underline": False,
+                            "code": False,
+                            "color": "gray",
+                        },
                     }
                 ]
             },
@@ -839,11 +947,31 @@ class MistuneNotionRenderer:
 
     def _render_break(self) -> NotionTextRichText:
         """Render a line break."""
-        return {"type": "text", "text": {"content": "\n", "link": None}, "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"}}
+        return {
+            "type": "text",
+            "text": {"content": "\n", "link": None},
+            "annotations": {
+                "bold": False,
+                "italic": False,
+                "strikethrough": False,
+                "underline": False,
+                "code": False,
+                "color": "default",
+            },
+        }
 
     def _map_language(self, language: str) -> str:
         """Map a language code to the format Notion expects."""
-        language_map = {"py": "python", "js": "javascript", "ts": "typescript", "sh": "shell", "bash": "shell", "yml": "yaml", "md": "markdown", "": "plain text"}
+        language_map = {
+            "py": "python",
+            "js": "javascript",
+            "ts": "typescript",
+            "sh": "shell",
+            "bash": "shell",
+            "yml": "yaml",
+            "md": "markdown",
+            "": "plain text",
+        }
 
         return language_map.get(language.lower(), language.lower())
 
