@@ -290,6 +290,10 @@ class MistuneNotionRenderer:
                     "type": "equation",
                     "equation": {"expression": child.get("raw", "")},
                 })
+            elif child.get("type") == "block_quote":
+                quote_block = self._create_quote_block(child)
+                if quote_block:
+                    child_blocks.append(quote_block)
             elif child.get("type") == "list":
                 child_blocks.extend(self._collect_list_blocks(child))
 
@@ -365,8 +369,8 @@ class MistuneNotionRenderer:
         }
         self.blocks.append(block)
 
-    def _render_block_quote(self, node: Dict[str, Any]) -> None:
-        """Render a block quote."""
+    def _create_quote_block(self, node: Dict[str, Any]) -> Optional[NotionQuoteBlock]:
+        """Create a quote block from a block quote node."""
         rich_text: List[NotionRichText] = []
 
         for child in node.get("children", []):
@@ -374,7 +378,13 @@ class MistuneNotionRenderer:
                 rich_text.extend(self._render_inline_children(child.get("children", [])))
 
         if rich_text:
-            block: NotionQuoteBlock = {"object": "block", "type": "quote", "quote": {"rich_text": rich_text}}
+            return {"object": "block", "type": "quote", "quote": {"rich_text": rich_text}}
+        return None
+
+    def _render_block_quote(self, node: Dict[str, Any]) -> None:
+        """Render a block quote."""
+        block = self._create_quote_block(node)
+        if block:
             self.blocks.append(block)
 
     def _render_divider(self) -> None:

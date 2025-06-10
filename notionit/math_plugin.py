@@ -3,6 +3,7 @@ from mistune.plugins.math import (
     math as base_math,
     math_in_list as base_math_in_list,
     math_in_quote as base_math_in_quote,
+    parse_block_math,
     render_block_math,
     render_inline_math,
 )
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 
 __all__ = ["notion_math"]
 
-SINGLE_LINE_BLOCK_MATH_PATTERN = r"^ {0,3}\$\$(?P<math_text_single>[^\n]+?)\$\$[ \t]*$"
+SINGLE_LINE_BLOCK_MATH_PATTERN = r"^ {0,7}\$\$(?P<math_text_single>[^\n]+?)\$\$[ \t]*$"
 
 def parse_single_line_math(block: "BlockParser", m: Match[str], state: "BlockState") -> int:
     text = m.group("math_text_single")
@@ -25,6 +26,12 @@ def parse_single_line_math(block: "BlockParser", m: Match[str], state: "BlockSta
 def notion_math(md: "Markdown") -> None:
     """Enhanced math plugin supporting single-line block math and math in lists."""
     base_math(md)
+    md.block.register(
+        "block_math",
+        r"^ {0,7}\$\$[ \t]*\n(?P<math_text>[\s\S]+?)\n\$\$[ \t]*$",
+        parse_block_math,
+        before="list",
+    )
     md.block.register(
         "block_math_single", SINGLE_LINE_BLOCK_MATH_PATTERN, parse_single_line_math, before="block_math"
     )
