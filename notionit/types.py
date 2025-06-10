@@ -5,7 +5,10 @@ Collection of Notion API type definitions.
 All TypedDict and Literal types are defined here.
 """
 
-from typing import Dict, List, Literal, Optional, TypedDict, Union
+from typing import Callable, Dict, List, Literal, Optional, TypedDict, Union
+
+# Common types for config
+StrOrCallable = Union[str, Callable[[], str]]
 
 # Color types for Notion
 NotionColor = Literal[
@@ -384,7 +387,15 @@ class NotionAPIResponse(TypedDict, total=False):
     public_url: Optional[str]
     # Error fields
     status: int
-    code: Literal["unauthorized", "forbidden", "object_not_found", "rate_limited", "invalid_request", "conflict", "internal_server_error"]
+    code: Literal[
+        "unauthorized",
+        "forbidden",
+        "object_not_found",
+        "rate_limited",
+        "invalid_request",
+        "conflict",
+        "internal_server_error",
+    ]
     message: str
     request_id: str
 
