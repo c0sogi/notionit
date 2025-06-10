@@ -369,12 +369,19 @@ class MistuneNotionRenderer:
         """Render a block quote."""
         rich_text: List[NotionRichText] = []
 
-        for child in node.get("children", []):
-            if child.get("type") == "paragraph":
-                rich_text.extend(self._render_inline_children(child.get("children", [])))
+        for idx, child in enumerate(node.get("children", [])):
+            text_content = self._extract_text_from_ast(child)
+            if text_content:
+                if idx > 0:
+                    rich_text.append(self._render_break())
+                rich_text.append(self._render_text({"raw": text_content}))
 
         if rich_text:
-            block: NotionQuoteBlock = {"object": "block", "type": "quote", "quote": {"rich_text": rich_text}}
+            block: NotionQuoteBlock = {
+                "object": "block",
+                "type": "quote",
+                "quote": {"rich_text": rich_text},
+            }
             self.blocks.append(block)
 
     def _render_divider(self) -> None:
@@ -478,18 +485,8 @@ class MistuneNotionRenderer:
         """Extract text content from a cell node."""
         content_parts: List[str] = []
 
-        def extract_text_recursive(node: Any) -> str:
-            if isinstance(node, dict):
-                node_dict = cast(Dict[object, object], node)
-                if node_dict.get("type") == "text":
-                    return str(node_dict.get("raw", ""))
-                elif (children := node_dict.get("children")) and isinstance(children, list):
-                    children = cast(List[object], children)
-                    return "".join(extract_text_recursive(child) for child in children)
-            return ""
-
         for child in cell_node.get("children", []):
-            content_parts.append(extract_text_recursive(child))
+            content_parts.append(self._extract_text_from_ast(child))
 
         return "".join(content_parts).strip()
 
@@ -979,3 +976,16 @@ class MistuneNotionRenderer:
         """Extract plain text from a table node."""
         # Simple extraction for now
         return str(node.get("raw", "Table content"))
+
+    def _extract_text_from_ast(self, node: Any) -> str:
+        """Recursively extract raw text from a Mistune AST node."""
+        if isinstance(node, dict):
+            node_dict = cast(Dict[object, object], node)
+            if node_dict.get("type") == "text":
+                return str(node_dict.get("raw", ""))
+            if (children := node_dict.get("children")) and isinstance(children, list):
+                children = cast(List[Any], children)
+                return "".join(self._extract_text_from_ast(child) for child in children)
+            if raw := node_dict.get("raw"):
+                return str(raw)
+        return ""
