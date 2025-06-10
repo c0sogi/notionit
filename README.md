@@ -32,7 +32,7 @@ pip install notionit
 Then run:
 
 ```bash
-notionit path/to/file.md --token YOUR_NOTION_TOKEN --parent-page-id YOUR_PAGE_ID
+notionit upload path/to/file.md --token YOUR_NOTION_TOKEN --parent-page-id YOUR_PAGE_ID
 ```
 
 You'll see an animated progress bar showing upload percentage and remaining time.
@@ -91,7 +91,7 @@ Optionally configure via environment variables:
 Run `notionit --help` for full options:
 
 ```bash
-notionit example.md \
+notionit upload example.md \
   --page-title "My Notes" \
   --duplicate-strategy timestamp \
   --debug
