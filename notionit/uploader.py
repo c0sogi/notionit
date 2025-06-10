@@ -10,7 +10,7 @@ import json
 import re
 import time
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Sequence, Union
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, TypeGuard, Union
 
 import mistune
 import requests
@@ -50,9 +50,7 @@ class NotionUploader:
         token: StrOrCallable = lambda: get_config("notion_token"),
         base_url: StrOrCallable = lambda: get_config("notion_base_url"),
         notion_version: StrOrCallable = lambda: get_config("notion_api_version"),
-        plugins: Optional[
-            Union[Iterable[mistune.plugins.PluginRef], Callable[[], Iterable[mistune.plugins.PluginRef]]]
-        ] = lambda: get_config("notion_parser_plugins").split(","),
+        plugins: Optional[Union[Iterable[mistune.plugins.PluginRef], Callable[[], Iterable[mistune.plugins.PluginRef]]]] = lambda: get_config("notion_parser_plugins").split(","),
         debug: bool = False,
         renderer: mistune.RendererRef = "ast",
         escape: bool = True,
@@ -76,9 +74,7 @@ class NotionUploader:
             "Content-Type": "application/json",
             "Notion-Version": notion_version,
         }
-        self.markdown_parser: mistune.Markdown = mistune.create_markdown(
-            renderer=renderer, escape=escape, hard_wrap=hard_wrap, plugins=unwrap_callable(plugins)
-        )
+        self.markdown_parser: mistune.Markdown = mistune.create_markdown(renderer=renderer, escape=escape, hard_wrap=hard_wrap, plugins=unwrap_callable(plugins))
         self.notion_renderer = MistuneNotionRenderer(token=token, base_url=base_url, notion_version=notion_version)
 
     def create_page(self, parent_page_id: str, title: str, blocks: Sequence[NotionExtendedBlock]) -> NotionAPIResponse:
@@ -393,14 +389,12 @@ class NotionUploader:
                 print(f"\n📁 {i + 1}/{len(file_paths)}: {file_path}")
 
             try:
-                result = self.upload_markdown_file(
-                    file_path=file_path, parent_page_id=parent_page_id, duplicate_strategy=duplicate_strategy
-                )
+                result = self.upload_markdown_file(file_path=file_path, parent_page_id=parent_page_id, duplicate_strategy=duplicate_strategy)
                 results.append(result)
 
                 if is_success_result(result):
                     if self.debug:
-                        print(format_upload_success_message(result.get("id") or ""))
+                        print(format_upload_success_message(result))
                 else:
                     if self.debug:
                         print(f"⚠️  Upload status: {result.get('status', 'unknown')}")
@@ -582,9 +576,7 @@ class NotionUploader:
             },
         }
 
-    def _create_heading_block(
-        self, text: str, level: int
-    ) -> Union[NotionHeading1Block, NotionHeading2Block, NotionHeading3Block]:
+    def _create_heading_block(self, text: str, level: int) -> Union[NotionHeading1Block, NotionHeading2Block, NotionHeading3Block]:
         """Create a heading block."""
         # Notion supports only heading_1, heading_2 and heading_3
         level = min(level, 3)
@@ -813,11 +805,11 @@ class NotionUploader:
         return "plain text"
 
 
-def is_success_result(result: UploadResult) -> bool:
+def is_success_result(result: UploadResult) -> TypeGuard[NotionAPIResponse]:
     """Return True if the result is a successful API response."""
     return "id" in result and "status" not in result
 
 
-def is_status_result(result: UploadResult) -> bool:
+def is_status_result(result: UploadResult) -> TypeGuard[UploadStatusResult]:
     """Return True if the result is a status response."""
     return "status" in result
