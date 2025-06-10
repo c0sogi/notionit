@@ -1,6 +1,6 @@
 from typing import Literal, Optional
 
-from spargear import ArgumentSpec, BaseArguments
+from spargear import ArgumentSpec, BaseArguments, SubcommandSpec
 
 from . import DuplicateStrategy, get_config, quick_upload
 
@@ -9,7 +9,7 @@ NOTION_VERSION = get_config("notion_api_version")
 PARSER_PLUGINS = get_config("notion_parser_plugins")
 
 
-class Arguments(BaseArguments):
+class UploadArguments(BaseArguments):
     file_path: ArgumentSpec[str] = ArgumentSpec(
         ["file_path"],
         help="Path to the markdown file to upload.",
@@ -58,8 +58,25 @@ class Arguments(BaseArguments):
         print("Upload response:", response)
 
 
+class NotionItCLI(BaseArguments):
+    """CLI for NotionIt."""
+
+    upload: SubcommandSpec[UploadArguments] = SubcommandSpec(
+        name="upload",
+        argument_class=UploadArguments,
+        help="Upload a markdown file to Notion.",
+        description="Upload a markdown file to Notion using the Notion API.",
+    )
+
+
 def main():
-    Arguments().run()
+    cli = NotionItCLI()
+    subcommand = cli.last_subcommand
+    if isinstance(subcommand, UploadArguments):
+        subcommand.run()
+    else:
+        cli.get_parser().print_help()
+        return
 
 
 if __name__ == "__main__":
