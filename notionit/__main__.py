@@ -10,7 +10,7 @@ from rich.progress import (
 from spargear import ArgumentSpec, BaseArguments, SubcommandSpec
 
 from . import DuplicateStrategy, get_config, is_success_result, quick_upload
-from ._utils import format_upload_success_message
+from ._utils import format_upload_error_message, format_upload_success_message
 
 BASE_URL = get_config("notion_base_url")
 NOTION_VERSION = get_config("notion_api_version")
@@ -22,6 +22,7 @@ class UploadArguments(BaseArguments):
         ["path_to_markdown"],
         help="Path to the markdown file to upload.",
         required=True,
+        nargs="+",
     )
     """Path to the markdown file to upload."""
     token: Optional[str] = None
@@ -79,11 +80,12 @@ class UploadArguments(BaseArguments):
                 progress=update,
             )
 
-        for response in responses:
+        for i, response in enumerate(responses, start=1):
             if is_success_result(response):
-                print(format_upload_success_message(response))
+                msg = format_upload_success_message(response)
             else:
-                print(f"⚠️ Upload status: {response.get('status', 'unknown')}")
+                msg = format_upload_error_message(response)
+            print(f"📁 {i}/{len(responses)}: {msg}")
 
 
 class NotionItCLI(BaseArguments):

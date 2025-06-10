@@ -1,6 +1,6 @@
 from typing import Callable, Optional, TypeVar, Union
 
-from .types import NotionAPIResponse
+from .types import NotionAPIResponse, UploadResult
 
 T = TypeVar("T")
 
@@ -60,3 +60,17 @@ def format_upload_success_message(upload_result: NotionAPIResponse) -> str:
         return f"✅ Upload successful: {url}"
     else:
         return "✅ Upload successful"
+
+
+def format_upload_error_message(upload_result: UploadResult) -> str:
+    """
+    Format an error message for an uploaded page.
+    """
+    status = upload_result.get("status")
+    if status is None:
+        status = "unknown error"
+
+    if status == "skipped":
+        return f"⚠️ Upload skipped: {status}"
+    else:
+        return f"❌ Upload failed: {status}"

@@ -15,7 +15,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Sequence, TypeGuard
 import mistune
 import requests
 
-from ._utils import format_upload_success_message, safe_url_join, unwrap_callable
+from ._utils import format_upload_error_message, format_upload_success_message, safe_url_join, unwrap_callable
 from .config import get_config
 from .renderer import MistuneNotionRenderer
 from .types import (
@@ -389,7 +389,7 @@ class NotionUploader:
         if progress is not None:
             progress(0.0)
 
-        for i, file_path in enumerate(file_paths):
+        for i, file_path in enumerate(file_paths, start=1):
             if self.debug:
                 print(f"\n📁 {i + 1}/{len(file_paths)}: {file_path}")
 
@@ -407,7 +407,7 @@ class NotionUploader:
                         print(format_upload_success_message(result))
                 else:
                     if self.debug:
-                        print(f"⚠️  Upload status: {result.get('status', 'unknown')}")
+                        print(format_upload_error_message(result))
 
             except Exception as e:
                 if self.debug:
@@ -417,10 +417,10 @@ class NotionUploader:
                 results.append(error_result)
             finally:
                 if progress is not None:
-                    progress((i + 1) / len(file_paths))
+                    progress(i / len(file_paths))
 
             # Delay before uploading the next file
-            if i < len(file_paths) - 1 and delay_seconds > 0:
+            if i < len(file_paths) and delay_seconds > 0:
                 time.sleep(delay_seconds)
 
         if progress is not None:
