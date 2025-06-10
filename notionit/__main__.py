@@ -77,7 +77,7 @@ class UploadArguments(BaseArguments):
             )
 
         if is_success_result(response):
-            print(format_upload_success_message(response.get("id", "")))
+            print(format_upload_success_message(response))
         else:
             print(f"⚠️ Upload status: {response.get('status', 'unknown')}")
 

@@ -1,7 +1,6 @@
-from typing import Callable, TypeVar, Union
+from typing import Callable, Optional, TypeVar, Union
 
-from .config import get_config
-from .types import StrOrCallable
+from .types import NotionAPIResponse
 
 T = TypeVar("T")
 
@@ -35,14 +34,12 @@ def unwrap_callable(value: Union[T, Callable[[], T]]) -> T:
     Returns:
         The result of calling the callable or the value itself
     """
-    if isinstance(value, Callable):
-        return value()
+    if callable(value):
+        return value()  # pyright: ignore[reportReturnType]
     return value
 
 
-def format_upload_success_message(
-    id: str, notion_app_base_url: StrOrCallable = get_config("notion_app_base_url")
-) -> str:
+def format_upload_success_message(upload_result: NotionAPIResponse) -> str:
     """
     Format a success message for an uploaded page.
 
@@ -52,4 +49,14 @@ def format_upload_success_message(
     Returns:
         A formatted success message
     """
-    return f"✅ Upload successful: {safe_url_join(unwrap_callable(notion_app_base_url), id.replace('-', ''))}"
+    url: Optional[str]
+    if "url" in upload_result:
+        url = upload_result["url"]
+    elif "public_url" in upload_result:
+        url = upload_result["public_url"]
+    else:
+        url = None
+    if url:
+        return f"✅ Upload successful: {url}"
+    else:
+        return "✅ Upload successful"
