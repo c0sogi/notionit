@@ -285,11 +285,24 @@ class MistuneNotionRenderer:
                 rich_text.extend(self._render_inline_children(child.get("children", [])))
             elif child.get("type") == "paragraph":
                 rich_text.extend(self._render_inline_children(child.get("children", [])))
+            elif child.get("type") == "block_math":
+                child_blocks.append({
+                    "object": "block",
+                    "type": "equation",
+                    "equation": {"expression": child.get("raw", "")},
+                })
             elif child.get("type") == "list":
                 child_blocks.extend(self._collect_list_blocks(child))
 
         if not rich_text:
-            return None
+            # Notion requires at least one text item; use empty string
+            rich_text.append(
+                {
+                    "type": "text",
+                    "text": {"content": "", "link": None},
+                    "annotations": {"bold": False, "italic": False, "strikethrough": False, "underline": False, "code": False, "color": "default"},
+                }
+            )
 
         if is_ordered:
             ordered_block: NotionNumberedListItemBlock = {
