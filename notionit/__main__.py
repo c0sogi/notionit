@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from rich.progress import (
     BarColumn,
@@ -18,7 +18,7 @@ PARSER_PLUGINS = get_config("notion_parser_plugins")
 
 
 class UploadArguments(BaseArguments):
-    path_to_markdown: ArgumentSpec[str] = ArgumentSpec(
+    path_to_markdown: ArgumentSpec[List[str]] = ArgumentSpec(
         ["path_to_markdown"],
         help="Path to the markdown file to upload.",
         required=True,
@@ -26,25 +26,27 @@ class UploadArguments(BaseArguments):
     """Path to the markdown file to upload."""
     token: Optional[str] = None
     """Notion API token."""
-    parent_page_id: Optional[str] = None
+    parent: Optional[str] = None
     """Notion parent page ID."""
     base_url: str = BASE_URL
     """Notion API base URL."""
-    notion_version: str = NOTION_VERSION
+    version: str = NOTION_VERSION
     """Notion API version."""
     plugins: str = PARSER_PLUGINS
     """Markdown parser plugins."""
-    page_title: Optional[str] = None
+    title: Optional[str] = None
     """Notion page title. If not set, the file name will be used."""
-    duplicate_strategy: Optional[DuplicateStrategy] = None
+    duplicate: Optional[DuplicateStrategy] = None
     """Strategy to handle duplicate pages (same title in the same parent page)."""
+    delay: float = 1.0
+    """Delay between uploads in seconds. Used only if uploading multiple files."""
     debug: bool = False
     """Debug mode. Prints the Notion API request and response."""
     renderer: Literal["html", "ast"] = "ast"
     """Mistune: Markdown renderer method."""
-    escape: bool = True
-    """Mistune: Escape HTML tags."""
-    hard_wrap: bool = False
+    noescape: bool = False
+    """Mistune: Disable escaping HTML tags."""
+    hardwrap: bool = False
     """Mistune: Hard wrap."""
 
     def run(self) -> None:
@@ -60,26 +62,28 @@ class UploadArguments(BaseArguments):
             def update(pct: float) -> None:
                 progress.update(task, completed=pct * 100)
 
-            response = quick_upload(
+            responses = quick_upload(
                 file_path=self.path_to_markdown.unwrap(),
                 token=self.token or get_config("notion_token"),
-                parent_page_id=self.parent_page_id or get_config("notion_parent_page_id"),
+                parent_page_id=self.parent or get_config("notion_parent_page_id"),
                 base_url=self.base_url or BASE_URL,
-                notion_version=self.notion_version or NOTION_VERSION,
+                notion_version=self.version or NOTION_VERSION,
                 plugins=self.plugins.split(",") if self.plugins else PARSER_PLUGINS.split(","),
-                page_title=self.page_title,
-                duplicate_strategy=self.duplicate_strategy,
+                page_title=self.title,
+                duplicate_strategy=self.duplicate,
                 debug=self.debug,
                 renderer=self.renderer,
-                escape=self.escape,
-                hard_wrap=self.hard_wrap,
+                escape=not self.noescape,
+                hard_wrap=self.hardwrap,
+                delay_seconds=self.delay,
                 progress=update,
             )
 
-        if is_success_result(response):
-            print(format_upload_success_message(response))
-        else:
-            print(f"⚠️ Upload status: {response.get('status', 'unknown')}")
+        for response in responses:
+            if is_success_result(response):
+                print(format_upload_success_message(response))
+            else:
+                print(f"⚠️ Upload status: {response.get('status', 'unknown')}")
 
 
 class NotionItCLI(BaseArguments):

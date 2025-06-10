@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from typing import Callable, Iterable, Optional, Union
+from typing import Callable, Iterable, List, Optional, Union
 
 import mistune
 
@@ -38,9 +38,7 @@ def create_uploader(
     token: StrOrCallable = lambda: get_config("notion_token"),
     base_url: StrOrCallable = lambda: get_config("notion_base_url"),
     notion_version: StrOrCallable = lambda: get_config("notion_api_version"),
-    plugins: Optional[
-        Union[Iterable[mistune.plugins.PluginRef], Callable[[], Iterable[mistune.plugins.PluginRef]]]
-    ] = lambda: get_config("notion_parser_plugins").split(","),
+    plugins: Optional[Union[Iterable[mistune.plugins.PluginRef], Callable[[], Iterable[mistune.plugins.PluginRef]]]] = lambda: get_config("notion_parser_plugins").split(","),
     debug: bool = False,
     renderer: mistune.RendererRef = "ast",
     escape: bool = True,
@@ -69,28 +67,27 @@ def create_uploader(
 
 
 def quick_upload(
-    file_path: str,
+    file_path: Union[str, List[str]],
     token: StrOrCallable = lambda: get_config("notion_token"),
     base_url: StrOrCallable = lambda: get_config("notion_base_url"),
     notion_version: StrOrCallable = lambda: get_config("notion_api_version"),
     parent_page_id: StrOrCallable = lambda: get_config("notion_parent_page_id"),
-    plugins: Optional[
-        Union[Iterable[mistune.plugins.PluginRef], Callable[[], Iterable[mistune.plugins.PluginRef]]]
-    ] = lambda: get_config("notion_parser_plugins").split(","),
+    plugins: Optional[Union[Iterable[mistune.plugins.PluginRef], Callable[[], Iterable[mistune.plugins.PluginRef]]]] = lambda: get_config("notion_parser_plugins").split(","),
     page_title: Optional[str] = None,
     duplicate_strategy: Optional[DuplicateStrategy] = None,
     debug: bool = False,
     renderer: mistune.RendererRef = "ast",
     escape: bool = True,
     hard_wrap: bool = False,
+    delay_seconds: float = 1.0,
     progress: Optional[Callable[[float], None]] = None,
-) -> UploadResult:
+) -> List[UploadResult]:
     """
     Convenience wrapper for quick uploads.
 
     Args:
-        token: Notion API token
         file_path: Path to the Markdown file
+        token: Notion API token
         parent_page_id: Parent page ID
         page_title: Page title (defaults to file name)
         duplicate_strategy: Strategy for handling duplicates
@@ -112,10 +109,22 @@ def quick_upload(
         hard_wrap=hard_wrap,
         plugins=plugins,
     )
-    return uploader.upload_markdown_file(
-        file_path=file_path,
-        parent_page_id=_parent_page_id,
-        page_title=page_title,
-        duplicate_strategy=duplicate_strategy,
-        progress=progress,
-    )
+    if isinstance(file_path, (list, tuple)):
+        return uploader.upload_markdown_files(
+            file_paths=file_path,
+            parent_page_id=_parent_page_id,
+            page_title=page_title,
+            duplicate_strategy=duplicate_strategy,
+            delay_seconds=delay_seconds,
+            progress=progress,
+        )
+    else:
+        return [
+            uploader.upload_markdown_file(
+                file_path=file_path,
+                parent_page_id=_parent_page_id,
+                page_title=page_title,
+                duplicate_strategy=duplicate_strategy,
+                progress=progress,
+            )
+        ]

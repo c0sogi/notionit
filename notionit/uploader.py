@@ -363,12 +363,14 @@ class NotionUploader:
         )
         return result
 
-    def batch_upload_files(
+    def upload_markdown_files(
         self,
         file_paths: List[str],
         parent_page_id: str,
-        duplicate_strategy: DuplicateStrategy = "timestamp",
+        page_title: Optional[str] = None,
+        duplicate_strategy: Optional[DuplicateStrategy] = None,
         delay_seconds: float = 1.0,
+        progress: Optional[Callable[[float], None]] = None,
     ) -> List[UploadResult]:
         """
         Upload multiple files in batch.
@@ -384,12 +386,20 @@ class NotionUploader:
         """
         results: List[UploadResult] = []
 
+        if progress is not None:
+            progress(0.0)
+
         for i, file_path in enumerate(file_paths):
             if self.debug:
                 print(f"\n📁 {i + 1}/{len(file_paths)}: {file_path}")
 
             try:
-                result = self.upload_markdown_file(file_path=file_path, parent_page_id=parent_page_id, duplicate_strategy=duplicate_strategy)
+                result = self.upload_markdown_file(
+                    file_path=file_path,
+                    parent_page_id=parent_page_id,
+                    page_title=page_title,
+                    duplicate_strategy=duplicate_strategy,
+                )
                 results.append(result)
 
                 if is_success_result(result):
@@ -405,10 +415,16 @@ class NotionUploader:
                 # Convert the error to a status result
                 error_result: UploadStatusResult = {"status": "cancelled"}
                 results.append(error_result)
+            finally:
+                if progress is not None:
+                    progress((i + 1) / len(file_paths))
 
             # Delay before uploading the next file
             if i < len(file_paths) - 1 and delay_seconds > 0:
                 time.sleep(delay_seconds)
+
+        if progress is not None:
+            progress(1.0)
 
         return results
 
