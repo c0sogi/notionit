@@ -222,8 +222,9 @@ class NotionCodeBlock(TypedDict):
     code: NotionCodeContent
 
 
-class NotionBulletedListItemContent(TypedDict):
+class NotionBulletedListItemContent(TypedDict, total=False):
     rich_text: List[NotionRichText]
+    children: List["NotionExtendedBlock"]
 
 
 class NotionBulletedListItemBlock(TypedDict):
@@ -232,8 +233,9 @@ class NotionBulletedListItemBlock(TypedDict):
     bulleted_list_item: NotionBulletedListItemContent
 
 
-class NotionNumberedListItemContent(TypedDict):
+class NotionNumberedListItemContent(TypedDict, total=False):
     rich_text: List[NotionRichText]
+    children: List["NotionExtendedBlock"]
 
 
 class NotionNumberedListItemBlock(TypedDict):

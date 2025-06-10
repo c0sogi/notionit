@@ -270,34 +270,56 @@ class MistuneNotionRenderer:
 
         for item_node in node.get("children", []):
             if item_node.get("type") == "list_item":
-                self._render_list_item(item_node, is_ordered)
+                block = self._render_list_item(item_node, is_ordered)
+                if block:
+                    self.blocks.append(block)
 
-    def _render_list_item(self, node: Dict[str, Any], is_ordered: bool) -> None:
+    def _render_list_item(self, node: Dict[str, Any], is_ordered: bool) -> Optional[NotionExtendedBlock]:
         """Render a list item."""
         # Extract list item contents
         rich_text: List[NotionRichText] = []
+        child_blocks: List[NotionExtendedBlock] = []
 
         for child in node.get("children", []):
             if child.get("type") == "block_text":
                 rich_text.extend(self._render_inline_children(child.get("children", [])))
             elif child.get("type") == "paragraph":
                 rich_text.extend(self._render_inline_children(child.get("children", [])))
+            elif child.get("type") == "list":
+                child_blocks.extend(self._collect_list_blocks(child))
 
-        if rich_text:
-            if is_ordered:
-                numbered_list_block: NotionNumberedListItemBlock = {
-                    "object": "block",
-                    "type": "numbered_list_item",
-                    "numbered_list_item": {"rich_text": rich_text},
-                }
-                self.blocks.append(numbered_list_block)
-            else:
-                bullet_list_block: NotionBulletedListItemBlock = {
-                    "object": "block",
-                    "type": "bulleted_list_item",
-                    "bulleted_list_item": {"rich_text": rich_text},
-                }
-                self.blocks.append(bullet_list_block)
+        if not rich_text:
+            return None
+
+        if is_ordered:
+            ordered_block: NotionNumberedListItemBlock = {
+                "object": "block",
+                "type": "numbered_list_item",
+                "numbered_list_item": {"rich_text": rich_text},
+            }
+            if child_blocks:
+                ordered_block["numbered_list_item"]["children"] = child_blocks
+            return ordered_block
+        else:
+            bullet_block: NotionBulletedListItemBlock = {
+                "object": "block",
+                "type": "bulleted_list_item",
+                "bulleted_list_item": {"rich_text": rich_text},
+            }
+            if child_blocks:
+                bullet_block["bulleted_list_item"]["children"] = child_blocks
+            return bullet_block
+
+    def _collect_list_blocks(self, node: Dict[str, Any]) -> List[NotionExtendedBlock]:
+        """Collect blocks from a nested list node."""
+        blocks: List[NotionExtendedBlock] = []
+        is_ordered = node.get("attrs", {}).get("ordered", False)
+        for item in node.get("children", []):
+            if item.get("type") == "list_item":
+                block = self._render_list_item(item, is_ordered)
+                if block:
+                    blocks.append(block)
+        return blocks
 
     def _render_code_block(self, node: Dict[str, Any]) -> None:
         """Render a code block."""
