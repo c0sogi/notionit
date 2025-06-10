@@ -1,7 +1,7 @@
 [project]
 name = "notionit"
-version = "0.1.1"
-description = "Add your description here"
+version = "0.1.2"
+description = "A Python package for Notion API: Markdown to Notion uploader with full-featured support powered by Mistune."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
