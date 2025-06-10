@@ -14,6 +14,7 @@
 * ✅ **Full Markdown Support** via [Mistune](https://mistune.readthedocs.io/)
 * 📤 **Upload to Notion** using official API
 * 📎 **File & Image Attachment Support**
+* 🔗 **Skips invalid links like anchors**
 * 📐 **LaTeX Math Block Rendering**
 * 🧩 **Plugin-based Parsing** (supports strikethrough, footnotes, task lists, etc.)
 * 📄 **Table-to-Block Conversion**

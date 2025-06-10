@@ -624,10 +624,11 @@ class MistuneNotionRenderer:
             self._render_file_block(url, self._get_link_text(children_text))
             return []  # Do not return inline text
 
-        # Otherwise apply the link to all child text
-        for text_item in children_text:
-            if text_item["type"] == "text":
-                text_item["text"]["link"] = {"url": url}
+        # Only apply link if the URL is valid (skip anchors and invalid URLs)
+        if self._is_valid_url(url):
+            for text_item in children_text:
+                if text_item["type"] == "text":
+                    text_item["text"]["link"] = {"url": url}
 
         return children_text
 
