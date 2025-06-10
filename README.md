@@ -35,6 +35,8 @@ Then run:
 notionit path/to/file.md --token YOUR_NOTION_TOKEN --parent-page-id YOUR_PAGE_ID
 ```
 
+You'll see an animated progress bar showing upload percentage and remaining time.
+
 Or use the convenience function in Python:
 
 ```python
@@ -94,6 +96,8 @@ notionit example.md \
   --duplicate-strategy timestamp \
   --debug
 ```
+
+During uploads, the CLI reports progress with a spinner and estimated remaining time.
 
 ---
 

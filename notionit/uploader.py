@@ -289,6 +289,7 @@ class NotionUploader:
         parent_page_id: str,
         page_title: Optional[str] = None,
         duplicate_strategy: Optional[DuplicateStrategy] = None,
+        progress: Optional[Callable[[float], None]] = None,
     ) -> UploadResult:
         """
         Upload a Markdown file.
@@ -298,6 +299,7 @@ class NotionUploader:
             parent_page_id: Parent page ID
             page_title: Page title (defaults to file name)
             duplicate_strategy: Strategy for handling duplicates
+            progress: Optional callback receiving progress percentage (0.0-1.0)
 
         Returns:
             Upload result (success response or status)
@@ -347,7 +349,12 @@ class NotionUploader:
                 return {"status": "skipped"}
 
         # Proceed with normal upload
-        result = self._upload_markdown_file(file_path=file_path, parent_page_id=parent_page_id, page_title=page_title)
+        result = self._upload_markdown_file(
+            file_path=file_path,
+            parent_page_id=parent_page_id,
+            page_title=page_title,
+            progress=progress,
+        )
         return result
 
     def batch_upload_files(
@@ -441,7 +448,13 @@ class NotionUploader:
         success_rate = (summary["success"] / summary["total"] * 100) if summary["total"] > 0 else 0
         print(f"  Success rate: {success_rate:.1f}%")
 
-    def _upload_markdown_file(self, file_path: str, parent_page_id: str, page_title: Optional[str] = None) -> NotionAPIResponse:
+    def _upload_markdown_file(
+        self,
+        file_path: str,
+        parent_page_id: str,
+        page_title: Optional[str] = None,
+        progress: Optional[Callable[[float], None]] = None,
+    ) -> NotionAPIResponse:
         """
         Upload a Markdown file to Notion.
 
@@ -471,6 +484,9 @@ class NotionUploader:
 
         # Split into chunks of 100 blocks (API limit)
         block_chunks = [blocks[i : i + 100] for i in range(0, len(blocks), 100)]
+        total_chunks = max(len(block_chunks), 1)
+        if progress is not None:
+            progress(0.0)
 
         # Create page with the first chunk
         result = self.create_page(
@@ -480,14 +496,22 @@ class NotionUploader:
         )
 
         if "id" not in result:
+            if progress is not None:
+                progress(1.0)
             return result
 
         page_id = result["id"]
+        if progress is not None:
+            progress(1 / total_chunks)
 
         # Append remaining chunks as children
-        for chunk in block_chunks[1:]:
+        for index, chunk in enumerate(block_chunks[1:], start=1):
             self._append_blocks_to_page(page_id, chunk)
+            if progress is not None:
+                progress((index + 1) / total_chunks)
 
+        if progress is not None:
+            progress(1.0)
         return result
 
     def _parse_text_formatting(self, text: str) -> List[NotionTextRichText]:
