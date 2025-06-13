@@ -431,7 +431,7 @@ class MistuneNotionRenderer:
         thead_nodes = [child for child in children if child.get("type") == "table_head"]
         tbody_nodes = [child for child in children if child.get("type") == "table_body"]
 
-        all_rows: List[List[str]] = []
+        all_rows: List[List[List[NotionRichText]]] = []
         has_header = False
 
         # Handle header rows
@@ -450,14 +450,14 @@ class MistuneNotionRenderer:
 
         return {"rows": all_rows, "column_count": column_count, "has_header": has_header}
 
-    def _extract_table_rows(self, section_node: Dict[str, Any]) -> List[List[str]]:
+    def _extract_table_rows(self, section_node: Dict[str, Any]) -> List[List[List[NotionRichText]]]:
         """Extract row data from a table section."""
-        rows: List[List[str]] = []
+        rows: List[List[List[NotionRichText]]] = []
 
         # Special handling when table_head directly contains table_cell children
         if section_node.get("type") == "table_head":
             # Treat table_head as a single row
-            row_cells: List[str] = []
+            row_cells: List[List[NotionRichText]] = []
             for cell_node in section_node.get("children", []):
                 if cell_node.get("type") == "table_cell":
                     cell_content = self._extract_cell_content(cell_node)
@@ -469,7 +469,7 @@ class MistuneNotionRenderer:
             # For table_body use the existing logic
             for row_node in section_node.get("children", []):
                 if row_node.get("type") == "table_row":
-                    row_cells = []
+                    row_cells: List[List[NotionRichText]] = []
 
                     for cell_node in row_node.get("children", []):
                         if cell_node.get("type") == "table_cell":
@@ -481,20 +481,15 @@ class MistuneNotionRenderer:
 
         return rows
 
-    def _extract_cell_content(self, cell_node: Dict[str, Any]) -> str:
-        """Extract text content from a cell node."""
-        content_parts: List[str] = []
+    def _extract_cell_content(self, cell_node: Dict[str, Any]) -> List[NotionRichText]:
+        """Extract rich text content from a cell node."""
+        return self._render_inline_children(cell_node.get("children", []))
 
-        for child in cell_node.get("children", []):
-            content_parts.append(self._extract_text_from_ast(child))
-
-        return "".join(content_parts).strip()
-
-    def _create_table_row_block(self, row_data: List[str], expected_columns: int) -> NotionTableRowBlock:
+    def _create_table_row_block(self, row_data: List[List[NotionRichText]], expected_columns: int) -> NotionTableRowBlock:
         """Create a table row block."""
         # Pad rows with empty cells if needed
         while len(row_data) < expected_columns:
-            row_data.append("")
+            row_data.append([])
 
         # Trim extra columns
         row_data = row_data[:expected_columns]
@@ -502,25 +497,7 @@ class MistuneNotionRenderer:
         # Convert each cell to a rich_text array
         cells: List[List[NotionRichText]] = []
         for cell_content in row_data:
-            cell_rich_text: List[NotionRichText] = (
-                [
-                    {
-                        "type": "text",
-                        "text": {"content": cell_content, "link": None},
-                        "annotations": {
-                            "bold": False,
-                            "italic": False,
-                            "strikethrough": False,
-                            "underline": False,
-                            "code": False,
-                            "color": "default",
-                        },
-                    }
-                ]
-                if cell_content
-                else []
-            )
-
+            cell_rich_text: List[NotionRichText] = cell_content if cell_content else []
             cells.append(cell_rich_text)
 
         return {"object": "block", "type": "table_row", "table_row": {"cells": cells}}

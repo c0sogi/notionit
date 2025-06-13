@@ -12,3 +12,7 @@ $$
 What about this?
 - $Inline math block!$
 - $$Another math block!$$
+
+| Column  | _Italic column_         |
+|-------- | ----------------------- |
+| $\alpha$| **bold $\alpha$**       |
