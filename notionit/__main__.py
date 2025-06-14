@@ -9,7 +9,13 @@ from rich.progress import (
 )
 from spargear import ArgumentSpec, BaseArguments, SubcommandSpec
 
-from . import DuplicateStrategy, get_config, is_success_result, quick_upload
+from . import (
+    DuplicateStrategy,
+    get_config,
+    is_success_result,
+    quick_upload,
+    quick_download,
+)
 from ._utils import format_upload_error_message, format_upload_success_message
 
 BASE_URL = get_config("notion_base_url")
@@ -88,6 +94,36 @@ class UploadArguments(BaseArguments):
             print(f"📁 {i}/{len(responses)}: {msg}")
 
 
+class DownloadArguments(BaseArguments):
+    page_id: ArgumentSpec[str] = ArgumentSpec(
+        ["page_id"],
+        help="Notion page ID to download.",
+        required=True,
+    )
+    """Notion page ID to download."""
+    output: str = "page.md"
+    """Output Markdown file path."""
+    token: Optional[str] = None
+    """Notion API token."""
+    base_url: str = BASE_URL
+    """Notion API base URL."""
+    version: str = NOTION_VERSION
+    """Notion API version."""
+    debug: bool = False
+    """Debug mode."""
+
+    def run(self) -> None:
+        quick_download(
+            page_id=self.page_id.unwrap(),
+            output_path=self.output,
+            token=self.token or get_config("notion_token"),
+            base_url=self.base_url or BASE_URL,
+            notion_version=self.version or NOTION_VERSION,
+            debug=self.debug,
+        )
+        print(f"✅ Saved to {self.output}")
+
+
 class NotionItCLI(BaseArguments):
     """CLI for NotionIt."""
 
@@ -98,11 +134,20 @@ class NotionItCLI(BaseArguments):
         description="Upload a markdown file to Notion using the Notion API.",
     )
 
+    download: SubcommandSpec[DownloadArguments] = SubcommandSpec(
+        name="download",
+        argument_class=DownloadArguments,
+        help="Download a Notion page as Markdown.",
+        description="Download a Notion page as Markdown using the Notion API.",
+    )
+
 
 def main():
     cli = NotionItCLI()
     subcommand = cli.last_subcommand
     if isinstance(subcommand, UploadArguments):
+        subcommand.run()
+    elif isinstance(subcommand, DownloadArguments):
         subcommand.run()
     else:
         cli.get_parser().print_help()

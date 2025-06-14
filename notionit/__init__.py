@@ -16,6 +16,7 @@ from .types import (
     UploadResult,
 )
 from .uploader import NotionUploader, is_status_result, is_success_result
+from .downloader import NotionDownloader
 
 # public interface
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "UploadResult",
     "DuplicateStrategy",
     "NotionExtendedBlock",
+    "NotionDownloader",
 ]
 
 
@@ -126,5 +128,24 @@ def quick_upload(
                 page_title=page_title,
                 duplicate_strategy=duplicate_strategy,
                 progress=progress,
-            )
+        )
         ]
+
+
+def quick_download(
+    page_id: str,
+    output_path: str,
+    token: StrOrCallable = lambda: get_config("notion_token"),
+    base_url: StrOrCallable = lambda: get_config("notion_base_url"),
+    notion_version: StrOrCallable = lambda: get_config("notion_api_version"),
+    debug: bool = False,
+) -> str:
+    """Convenience wrapper for quickly downloading a page."""
+    downloader = NotionDownloader(
+        token=token,
+        base_url=base_url,
+        notion_version=notion_version,
+        debug=debug,
+    )
+    return downloader.download_page(page_id, output_path)
+

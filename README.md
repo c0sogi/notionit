@@ -13,6 +13,7 @@
 
 * ✅ **Full Markdown Support** via [Mistune](https://mistune.readthedocs.io/)
 * 📤 **Upload to Notion** using official API
+* 📥 **Download from Notion** back to Markdown
 * 📎 **File & Image Attachment Support**
 * 🔗 **Skips invalid links like anchors**
 * 📐 **LaTeX Math Block Rendering**
@@ -47,6 +48,12 @@ quick_upload(
     token="secret_abc123",
     parent_page_id="notion_page_id",
 )
+```
+
+To download a page back to Markdown:
+
+```bash
+notionit download PAGE_ID -o output.md --token YOUR_NOTION_TOKEN
 ```
 
 ---
