@@ -382,6 +382,7 @@ class NotionAPIResponse(TypedDict, total=False):
     icon: Optional[Dict[Literal["type", "emoji", "external", "file"], Union[str, Dict[str, str]]]]
     parent: Dict[Literal["type", "page_id"], Union[str, str]]
     archived: bool
+    in_trash: bool
     properties: NotionPageResponseProperties
     url: str
     public_url: Optional[str]
@@ -478,6 +479,7 @@ class NotionSearchResultPage(TypedDict):
     icon: Optional[NotionIcon]
     parent: NotionParent
     archived: bool
+    in_trash: bool
     properties: NotionSearchPageProperties
     url: str
     public_url: Optional[str]

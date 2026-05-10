@@ -2,7 +2,7 @@ from os import environ
 from typing import Literal
 
 DEFAULT_NOTION_BASE_URL = "https://api.notion.com/v1"
-DEFAULT_NOTION_API_VERSION = "2022-06-28"
+DEFAULT_NOTION_API_VERSION = "2026-03-11"
 DEFAULT_NOTION_PARSER_PLUGINS = "strikethrough,mark,insert,subscript,superscript,footnotes,table,task_lists,def_list,abbr,ruby,notionit.math_plugin.notion_math"
 
 
